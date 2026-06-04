@@ -21,6 +21,7 @@ type ReviewResponse = {
 type ReviewFormValues = {
     language: string;
     code: string;
+    reviewRequest?: string;
     useOllama?: boolean;
 };
 
@@ -191,6 +192,18 @@ export default function Review() {
                                         rows={14}
                                         spellCheck={false}
                                         style={{ fontFamily: 'var(--font-mono), Consolas, monospace' }}
+                                    />
+                                </Form.Item>
+                                <Form.Item
+                                    label="Review Request"
+                                    name="reviewRequest"
+                                    tooltip="비워두면 기본 리뷰 기준만 적용됩니다."
+                                >
+                                    <Input.TextArea
+                                        rows={3}
+                                        maxLength={1200}
+                                        showCount
+                                        placeholder="예: 보안 위주로 봐줘, 성능 병목만 확인해줘, React 상태 관리 관점에서 리뷰해줘"
                                     />
                                 </Form.Item>
                                 <Form.Item name="useOllama" valuePropName="checked">

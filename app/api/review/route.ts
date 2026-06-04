@@ -7,6 +7,7 @@ type ReviewRequest = {
     code?: string;
     language?: SupportedLanguage;
     useOllama?: boolean;
+    reviewRequest?: string;
 };
 
 type ReviewFinding = {
@@ -245,8 +246,25 @@ function createLineNumberedCode(code: string) {
         .join('\n');
 }
 
-function createReviewPrompt(code: string, language: SupportedLanguage, retryCount: number, previousResponse?: string) {
+function normalizeReviewRequest(value?: string) {
+    return value?.trim().slice(0, 1200) || '';
+}
+
+function createReviewPrompt(
+    code: string,
+    language: SupportedLanguage,
+    reviewRequest: string,
+    retryCount: number,
+    previousResponse?: string
+) {
     const schema = '{"findings":[{"severity":"high|medium|low","title":"짧은 한국어 제목","detail":"한두 문장의 한국어 설명","line":1}]}';
+    const customReviewSection = reviewRequest
+        ? [
+            '사용자 추가 리뷰 요청:',
+            reviewRequest,
+            '위 요청을 기본 리뷰 기준보다 우선 반영하되, 명백한 버그, 보안, 테스트 누락은 함께 지적하세요.',
+        ].join('\n')
+        : '';
 
     if (retryCount > 0) {
         return [
@@ -254,6 +272,7 @@ function createReviewPrompt(code: string, language: SupportedLanguage, retryCoun
             '이번에는 설명 없이 JSON 객체만 반환하세요.',
             `정확한 스키마: ${schema}`,
             'line은 아래 라인 번호가 붙은 코드의 실제 문제 라인입니다.',
+            customReviewSection,
             previousResponse ? `이전 응답: ${previousResponse.slice(0, 1200)}` : '',
             `언어: ${language}`,
             '라인 번호가 붙은 코드:',
@@ -267,6 +286,7 @@ function createReviewPrompt(code: string, language: SupportedLanguage, retryCoun
         '버그, 보안, 유지보수성, 누락된 테스트를 우선하세요.',
         '최대 6개 항목만 반환하세요.',
         'line은 아래 라인 번호가 붙은 코드의 실제 문제 라인입니다.',
+        customReviewSection,
         `언어: ${language}`,
         '라인 번호가 붙은 코드:',
         createLineNumberedCode(code),
@@ -306,12 +326,12 @@ async function requestOllamaReview(prompt: string) {
     return data.response || '';
 }
 
-async function createOllamaFindings(code: string, language: SupportedLanguage) {
+async function createOllamaFindings(code: string, language: SupportedLanguage, reviewRequest: string) {
     const totalLines = code.split(/\r?\n/).length;
     let lastResponse = '';
 
     for (let retryCount = 0; retryCount < MAX_OLLAMA_RETRIES; retryCount += 1) {
-        lastResponse = await requestOllamaReview(createReviewPrompt(code, language, retryCount, lastResponse));
+        lastResponse = await requestOllamaReview(createReviewPrompt(code, language, reviewRequest, retryCount, lastResponse));
 
         try {
             const findings = normalizeFindings(extractJsonObject(lastResponse), totalLines);
@@ -330,6 +350,7 @@ export async function POST(req: Request) {
     const body = (await req.json()) as ReviewRequest;
     const code = body.code?.trim() || '';
     const language = body.language || 'TypeScript';
+    const reviewRequest = normalizeReviewRequest(body.reviewRequest);
 
     if (!code) {
         return jsonResponse({ message: '리뷰할 코드를 입력하세요.' }, 400);
@@ -352,7 +373,7 @@ export async function POST(req: Request) {
                 source: 'ollama',
                 summary: 'Ollama 리뷰 결과입니다.',
                 detectedLanguage: detected.language,
-                findings: await createOllamaFindings(code, language),
+                findings: await createOllamaFindings(code, language, reviewRequest),
             });
         } catch (err) {
             console.error(err);
