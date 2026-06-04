@@ -1,29 +1,23 @@
-import { match } from 'assert';
-import {  NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+const protectedRoutes = ['/home', '/review', '/dashboard', '/setting'];
 
 export function middleware(request: NextRequest) {
-    const token = request.cookies.get('token'); 
-    const { pathname } = request.nextUrl
+    const token = request.cookies.get('token');
+    const { pathname } = request.nextUrl;
 
-    // 토큰이 있는데 로그인 페이지로 이동하려고 할때
-    if (token && pathname === '/Login') {
+    if (token && pathname === '/login') {
         return NextResponse.redirect(new URL('/home', request.url));
     }
 
-    // 토큰이 없는데 로그인 페이지가 아닌 다른 페이지로 이동하려고 할때
-
-    if(!token && pathname === '/home') {
+    if (!token && protectedRoutes.some((route) => pathname.startsWith(route))) {
         return NextResponse.redirect(new URL('/login', request.url));
     }
-
-
-    // 추후에 메뉴에서 접근할 곳 추가하기
 
     return NextResponse.next();
 }
 
-// export const config = {
-//     matcher: ['/home', '/login'],
-// }
+export const config = {
+    matcher: ['/home/:path*', '/review/:path*', '/dashboard/:path*', '/setting/:path*', '/login'],
+};

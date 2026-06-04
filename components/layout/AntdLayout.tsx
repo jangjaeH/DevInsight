@@ -4,7 +4,7 @@ import { Layout } from "antd";
 import Sidemenu from "./menu/sidemenu";
 import { usePathname, useRouter } from "next/navigation"
 import { LoginOutlined, IdcardOutlined } from '@ant-design/icons';
-import { Button, Flex, FloatButton, Tooltip } from "antd";
+import { Button, Flex, Tooltip } from "antd";
 
 const { Sider, Content, Header } = Layout;
 
@@ -15,7 +15,6 @@ export default function AntdLayout({
     children: React.ReactNode, 
     hasToken: boolean 
     }) {
-        console.log('hasToken:', hasToken)
     const pathname = usePathname();
     
     const isLoginPage = pathname === '/login';

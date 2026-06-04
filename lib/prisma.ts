@@ -1,5 +1,5 @@
 import { PrismaMariaDb } from '@prisma/adapter-mariadb'
-import { PrismaClient } from '../src/generated/prisma' // schema의 output 경로와 맞춤
+import { PrismaClient } from '../src/generated/prisma/client'
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient }
 
@@ -7,9 +7,9 @@ const globalForPrisma = global as unknown as { prisma: PrismaClient }
 const adapter = new PrismaMariaDb({
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
+  password: process.env.DB_PASS,
   database: process.env.DB_NAME,
-  port: 3306,
+  port: Number(process.env.DB_PORT || 3306),
 })
 
 export const prisma =

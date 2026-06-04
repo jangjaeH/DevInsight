@@ -1,17 +1,17 @@
-import React  from 'react';
+'use client';
+
 import { Menu } from 'antd';
 import type { MenuProps } from 'antd';
-import { MailOutlined, AppstoreOutlined, DashboardOutlined, ProjectOutlined, FileSearchOutlined, BarChartOutlined, ClusterOutlined, TeamOutlined, SettingOutlined, } from "@ant-design/icons";
-import { NextResponse } from 'next/server';
-import { useRouter } from 'next/navigation';
-
+import { ClusterOutlined, DashboardOutlined, HomeOutlined, SettingOutlined } from '@ant-design/icons';
+import { usePathname, useRouter } from 'next/navigation';
 
 type MenuItem = Required<MenuProps>['items'][number];
+
 const items: MenuItem[] = [
     {
-      key: '/home', 
-      label: 'Home',  
-      icon: <MailOutlined />,
+        key: '/home',
+        label: 'Home',
+        icon: <HomeOutlined />,
     },
     {
         key: '/review',
@@ -27,24 +27,25 @@ const items: MenuItem[] = [
         key: '/setting',
         label: 'Setting',
         icon: <SettingOutlined />,
-    }
+    },
 ];
 
 export default function Sidemenu() {
     const router = useRouter();
-    const onClick: MenuProps['onClick'] = (e) => {
-        console.log('click ', e.key);
-        router.replace(e.key);
+    const pathname = usePathname();
+
+    const onClick: MenuProps['onClick'] = (event) => {
+        router.replace(event.key);
     };
 
     return (
         <Menu
             onClick={onClick}
-            style={{ height: "100vh" }}
-            defaultSelectedKeys={['1']}    
+            style={{ height: '100vh' }}
+            selectedKeys={[pathname]}
             theme="dark"
             mode="inline"
             items={items}
         />
     );
-};
+}

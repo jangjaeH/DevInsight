@@ -1,23 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import 'antd/dist/reset.css';
-import  Sidemenu  from "../components/layout/menu/sidemenu";
-import { Layout } from "antd";
 import { cookies } from "next/headers"; 
 import AntdLayout from "@/components/layout/AntdLayout";
 import { AntdRegistry } from '@ant-design/nextjs-registry';
-const { Sider, Content, Header } = Layout;
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "dev-insight",
@@ -34,7 +20,7 @@ export default async function RootLayout({
 
   return (
     <html lang="ko">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+      <body>
         <AntdRegistry>
             <AntdLayout hasToken={!!token}>
               {children}
