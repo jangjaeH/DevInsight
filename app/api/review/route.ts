@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { saveReviewHistory } from '@/lib/reviewHistory';
+import { detectLanguage } from '@/lib/reviewLanguage';
 
 type SupportedLanguage = 'TypeScript' | 'JavaScript' | 'Java' | 'Python';
 type Severity = 'high' | 'medium' | 'low';
@@ -57,28 +58,6 @@ function jsonResponse(body: unknown, status = 200) {
             'Content-Type': 'application/json; charset=utf-8',
         },
     });
-}
-
-function detectLanguage(code: string): LanguageDetection {
-    const trimmed = code.trim();
-
-    if (/^\s*(from\s+\w+\s+import|import\s+\w+|def\s+\w+\(|class\s+\w+[:(])/m.test(trimmed)) {
-        return { language: 'Python', confidence: 'high' };
-    }
-
-    if (/\b(public|private|protected)\s+(class|interface|enum)\b|\bSystem\.out\.println\(|\bpublic\s+static\s+void\s+main\s*\(/.test(trimmed)) {
-        return { language: 'Java', confidence: 'high' };
-    }
-
-    if (/\b(type|interface)\s+\w+\b|:\s*(string|number|boolean|unknown|never|Record<|Array<)|\bas\s+(const|string|number|boolean|\w+)/.test(trimmed)) {
-        return { language: 'TypeScript', confidence: 'high' };
-    }
-
-    if (/\b(const|let|var|function|import|export|=>)\b/.test(trimmed)) {
-        return { language: 'JavaScript', confidence: 'medium' };
-    }
-
-    return { language: 'Unknown', confidence: 'low' };
 }
 
 function isLanguageMismatch(selected: SupportedLanguage, detected: LanguageDetection) {
@@ -455,7 +434,7 @@ export async function POST(req: Request) {
         return jsonResponse({ message: '리뷰할 코드를 입력하세요.' }, 400);
     }
 
-    const detected = detectLanguage(code);
+    const detected = detectLanguage(code) as LanguageDetection;
     if (isLanguageMismatch(language, detected)) {
         return jsonResponse(
             {

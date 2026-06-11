@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:review-language": "node scripts/test-review-language.mjs",
     "ollama:serve": "powershell -ExecutionPolicy Bypass -File scripts/start-ollama.ps1"
   },
   "dependencies": {

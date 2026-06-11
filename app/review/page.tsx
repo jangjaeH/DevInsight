@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { Alert, Button, Card, Checkbox, Col, Empty, Form, Input, Radio, Row, Select, Space, Tag, Typography, Upload } from 'antd';
 import { FileSearchOutlined, ThunderboltOutlined, UploadOutlined } from '@ant-design/icons';
+import { getLanguageFromFileName } from '@/lib/reviewLanguage';
 
 type Finding = {
     severity: 'high' | 'medium' | 'low';
@@ -71,17 +72,6 @@ async function requestReview(payload: ReviewPayload) {
 
   return response.json();
 }`;
-
-function getLanguageFromFileName(fileName: string) {
-    const extension = fileName.split('.').pop()?.toLowerCase();
-
-    if (extension === 'ts' || extension === 'tsx') return 'TypeScript';
-    if (extension === 'js' || extension === 'jsx') return 'JavaScript';
-    if (extension === 'java') return 'Java';
-    if (extension === 'py') return 'Python';
-
-    return undefined;
-}
 
 function CodePreview({ code, findings }: { code: string; findings: Finding[] }) {
     const lines = code.split(/\r?\n/);
