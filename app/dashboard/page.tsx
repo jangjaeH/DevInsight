@@ -4,7 +4,7 @@ import { CheckCircleOutlined, ExclamationCircleOutlined, FileSearchOutlined } fr
 const recentReviews = [
     { name: 'login/page.tsx', score: 72, status: 'needs review', severity: 'medium' },
     { name: 'api/login/route.ts', score: 81, status: 'pass', severity: 'low' },
-    { name: 'layout/AntdLayout.tsx', score: 88, status: 'pass', severity: 'low' },
+    { name: 'layout/AppShell.tsx', score: 88, status: 'pass', severity: 'low' },
 ];
 
 export default function Dashboard() {
@@ -43,7 +43,7 @@ export default function Dashboard() {
                         <Card title="Quality Score">
                             <Progress type="dashboard" percent={78} strokeColor="#1677ff" />
                             <Typography.Paragraph type="secondary" style={{ marginTop: 16 }}>
-                                최근 리뷰 기준 평균 점수입니다. 중간 위험도 이상 항목이 줄면 점수가 상승합니다.
+                                최근 리뷰 기준 평균 점수입니다. 중간 위험 이상 항목을 줄이면 점수가 상승합니다.
                             </Typography.Paragraph>
                         </Card>
                     </Col>

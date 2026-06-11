@@ -95,7 +95,7 @@ function createLocalReview(code: string, language: SupportedLanguage): ReviewFin
         findings.push({
             severity: 'low',
             title: '분석할 코드가 짧습니다',
-            detail: '함수 또는 파일 단위의 코드를 입력하면 더 정확한 리뷰를 받을 수 있습니다.',
+            detail: '함수나 파일 단위의 코드를 입력하면 더 정확한 리뷰를 받을 수 있습니다.',
             line: 1,
         });
     }
@@ -122,7 +122,7 @@ function createLocalReview(code: string, language: SupportedLanguage): ReviewFin
         findings.push({
             severity: 'high',
             title: '민감 정보 노출 가능성',
-            detail: '토큰이나 비밀번호는 로그 또는 브라우저 저장소에 직접 남기지 않는 것이 안전합니다.',
+            detail: '토큰이나 비밀번호를 로그 또는 브라우저 저장소에 직접 남기지 않는 것이 안전합니다.',
             line: findLine(lines, /(console\.log|localStorage|sessionStorage)/),
         });
     }
@@ -132,7 +132,7 @@ function createLocalReview(code: string, language: SupportedLanguage): ReviewFin
         findings.push({
             severity: 'low',
             title: '긴 라인이 있습니다',
-            detail: '120자를 넘는 라인은 리뷰와 유지보수성이 떨어질 수 있어 적절히 분리하는 것이 좋습니다.',
+            detail: '120자를 넘는 라인은 리뷰와 유지보수가 어려울 수 있어 적절히 분리하는 것이 좋습니다.',
             line: longLineIndex + 1,
         });
     }
@@ -141,7 +141,7 @@ function createLocalReview(code: string, language: SupportedLanguage): ReviewFin
         findings.push({
             severity: 'medium',
             title: '비동기 처리 확인 필요',
-            detail: '네트워크 또는 DB 호출은 await, then, catch와 오류 처리가 있는지 확인하세요.',
+            detail: '네트워크 또는 DB 호출에 await, then, catch와 오류 처리가 있는지 확인하세요.',
             line: findLine(lines, /(fetch|axios|query|create|update|delete)\(/),
         });
     }
@@ -158,8 +158,8 @@ function createLocalReview(code: string, language: SupportedLanguage): ReviewFin
     if (findings.length === 0) {
         findings.push({
             severity: 'low',
-            title: '큰 위험 신호는 없습니다',
-            detail: '자동 리뷰 기준으로는 즉시 보이는 문제를 찾지 못했습니다. 실제 실행 경로와 테스트는 별도로 확인하세요.',
+            title: '즉시 보이는 위험 신호는 없습니다',
+            detail: '자동 리뷰 기준으로는 명확한 문제를 찾지 못했습니다. 실제 실행 경로와 테스트는 별도로 확인하세요.',
         });
     }
 
@@ -262,13 +262,13 @@ function createReviewPrompt(
         ? [
             '사용자 추가 리뷰 요청:',
             reviewRequest,
-            '위 요청을 기본 리뷰 기준보다 우선 반영하되, 명백한 버그, 보안, 테스트 누락은 함께 지적하세요.',
+            '이 요청을 기본 리뷰 기준보다 우선 반영하되, 명백한 버그, 보안, 테스트 누락은 함께 지적하세요.',
         ].join('\n')
         : '';
 
     if (retryCount > 0) {
         return [
-            '이전 응답이 카드 렌더링용 JSON으로 파싱되지 않았습니다.',
+            '이전 응답은 코드 펜스 또는 설명 때문에 JSON으로 파싱되지 않았습니다.',
             '이번에는 설명 없이 JSON 객체만 반환하세요.',
             `정확한 스키마: ${schema}`,
             'line은 아래 라인 번호가 붙은 코드의 실제 문제 라인입니다.',
@@ -290,7 +290,7 @@ function createReviewPrompt(
         `언어: ${language}`,
         '라인 번호가 붙은 코드:',
         createLineNumberedCode(code),
-    ].join('\n');
+    ].filter(Boolean).join('\n');
 }
 
 async function requestOllamaReview(prompt: string) {
@@ -308,8 +308,8 @@ async function requestOllamaReview(prompt: string) {
                 num_predict: 2048,
             },
             system: [
-                '당신은 한국어로만 답변하는 시니어 코드 리뷰어입니다.',
-                '반드시 JSON만 반환하세요. 마크다운, 설명 문장, 코드블록을 반환하지 마세요.',
+                '당신은 한국어로만 답하는 시니어 코드 리뷰어입니다.',
+                '반드시 JSON만 반환하세요. 마크다운, 설명 문장, 코드블록은 반환하지 마세요.',
                 'title과 detail은 반드시 자연스러운 한국어로 작성하세요.',
                 'severity는 high, medium, low 중 하나만 사용하세요.',
                 'line은 문제가 있는 1부터 시작하는 코드 라인 번호입니다. 특정 라인이 없으면 생략하세요.',

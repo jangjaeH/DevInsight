@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import 'antd/dist/reset.css';
-import { cookies } from "next/headers"; 
-import AntdLayout from "@/components/layout/AntdLayout";
+import { cookies } from "next/headers";
+import AppShell from "@/components/layout/AppShell";
 import { AntdRegistry } from '@ant-design/nextjs-registry';
 
 export const metadata: Metadata = {
@@ -22,9 +22,9 @@ export default async function RootLayout({
     <html lang="ko">
       <body>
         <AntdRegistry>
-            <AntdLayout hasToken={!!token}>
+            <AppShell hasToken={!!token}>
               {children}
-            </AntdLayout>
+            </AppShell>
         </AntdRegistry>
       </body>
     </html>

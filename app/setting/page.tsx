@@ -1,4 +1,8 @@
-import { Alert, Card, Descriptions, Space, Tag, Typography } from 'antd';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { Alert, Button, Card, Descriptions, Space, Tag, Typography } from 'antd';
+import { ReloadOutlined } from '@ant-design/icons';
 
 type OllamaStatus = {
     ok: boolean;
@@ -9,65 +13,84 @@ type OllamaStatus = {
     message?: string;
 };
 
-async function getOllamaStatus(): Promise<OllamaStatus> {
-    const url = process.env.OLLAMA_URL || 'http://localhost:11434';
-    const model = process.env.OLLAMA_MODEL || 'codellama';
+const initialStatus: OllamaStatus = {
+    ok: false,
+    url: '-',
+    model: '-',
+    models: [],
+    message: '상태를 확인하는 중입니다.',
+};
 
-    try {
-        const response = await fetch(`${url}/api/tags`, { cache: 'no-store' });
-        if (!response.ok) {
-            return { ok: false, url, model, models: [], message: `Ollama responded with ${response.status}.` };
+export default function Setting() {
+    const [status, setStatus] = useState<OllamaStatus>(initialStatus);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const refreshStatus = async () => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            const response = await fetch('/api/ollama/status', { cache: 'no-store' });
+            const data = await response.json();
+
+            if (!response.ok) {
+                setError(data.message || 'Ollama 상태를 확인하지 못했습니다.');
+                return;
+            }
+
+            setStatus(data);
+        } catch {
+            setError('Ollama 상태 조회 중 오류가 발생했습니다.');
+        } finally {
+            setLoading(false);
         }
+    };
 
-        const data = await response.json() as { models?: Array<{ name?: string }> };
-        const models = data.models?.map((item) => item.name).filter((name): name is string => Boolean(name)) || [];
-
-        return {
-            ok: true,
-            url,
-            model,
-            models,
-            hasConfiguredModel: models.some((name) => name === model || name.startsWith(`${model}:`)),
-        };
-    } catch {
-        return { ok: false, url, model, models: [], message: 'Ollama server is not reachable.' };
-    }
-}
-
-export default async function Setting() {
-    const status = await getOllamaStatus();
+    useEffect(() => {
+        refreshStatus();
+    }, []);
 
     return (
         <main style={{ padding: 24 }}>
             <Space direction="vertical" size={20} style={{ width: '100%' }}>
                 <div>
                     <Typography.Title level={2} style={{ marginBottom: 4 }}>
-                        Setting
+                        Settings
                     </Typography.Title>
                     <Typography.Text type="secondary">
-                        현재 서버 환경 기준의 리뷰 엔진 설정입니다.
+                        현재 서버 환경 기준의 코드 리뷰 엔진 상태를 확인합니다.
                     </Typography.Text>
                 </div>
 
-                {!status.ok ? (
+                {error ? (
+                    <Alert type="error" showIcon message={error} />
+                ) : !status.ok ? (
                     <Alert
                         type="warning"
                         showIcon
                         message="Ollama is not connected"
-                        description="Ollama가 실행 중이 아니거나 OLLAMA_URL 설정에 연결할 수 없습니다. 리뷰는 로컬 휴리스틱으로 대체됩니다."
+                        description={status.message || 'Ollama가 실행 중이 아니거나 OLLAMA_URL 설정에 연결할 수 없습니다. 리뷰는 로컬 휴리스틱으로 대체됩니다.'}
                     />
                 ) : !status.hasConfiguredModel ? (
                     <Alert
                         type="warning"
                         showIcon
                         message="Configured model is not installed"
-                        description={`Ollama는 연결됐지만 ${status.model} 모델을 찾지 못했습니다.`}
+                        description={`Ollama에는 연결되었지만 ${status.model} 모델을 찾지 못했습니다.`}
                     />
                 ) : (
                     <Alert type="success" showIcon message="Ollama is ready" />
                 )}
 
-                <Card title="AI Review Engine">
+                <Card
+                    title="AI Review Engine"
+                    extra={
+                        <Button icon={<ReloadOutlined />} loading={loading} onClick={refreshStatus}>
+                            Refresh
+                        </Button>
+                    }
+                >
                     <Descriptions bordered column={1}>
                         <Descriptions.Item label="Ollama URL">{status.url}</Descriptions.Item>
                         <Descriptions.Item label="Configured Model">{status.model}</Descriptions.Item>
