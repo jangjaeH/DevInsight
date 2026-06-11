@@ -20,12 +20,12 @@ const items: MenuItem[] = [
     },
     {
         key: '/dashboard',
-        label: 'Dash Board',
+        label: 'Dashboard',
         icon: <DashboardOutlined />,
     },
     {
         key: '/setting',
-        label: 'Setting',
+        label: 'Settings',
         icon: <SettingOutlined />,
     },
 ];

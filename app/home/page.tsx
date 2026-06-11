@@ -27,7 +27,7 @@ export default async function Home() {
                     <Col xs={24} lg={8}>
                         <Card title="Run Review" extra={<ClusterOutlined />}>
                             <Typography.Paragraph type="secondary">
-                                코드 조각을 붙여 넣고 위험도, 타입 안정성, 보안 노출 가능성을 확인합니다.
+                                코드 조각을 붙여 넣고 위험한 타입, 비동기 처리, 보안 노출 가능성을 확인합니다.
                             </Typography.Paragraph>
                             <Link href="/review">
                                 <Button type="primary">Open Review</Button>

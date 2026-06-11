@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Alert, Button, Card, Checkbox, Col, Form, Input, Row, Select, Space, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Checkbox, Col, Empty, Form, Input, Row, Select, Space, Tag, Typography } from 'antd';
 import { FileSearchOutlined, ThunderboltOutlined } from '@ant-design/icons';
 
 type Finding = {
@@ -162,6 +162,9 @@ export default function Review() {
                     <Typography.Title level={2} style={{ marginBottom: 4 }}>
                         Code Review
                     </Typography.Title>
+                    <Typography.Text type="secondary">
+                        코드를 붙여 넣고 로컬 규칙 또는 Ollama로 위험 신호를 빠르게 확인합니다.
+                    </Typography.Text>
                 </div>
 
                 <Row gutter={[16, 16]}>
@@ -197,7 +200,7 @@ export default function Review() {
                                 <Form.Item
                                     label="Review Request"
                                     name="reviewRequest"
-                                    tooltip="비워두면 기본 리뷰 기준만 적용됩니다."
+                                    tooltip="비워 두면 기본 리뷰 기준만 적용합니다."
                                 >
                                     <Input.TextArea
                                         rows={3}
@@ -230,10 +233,11 @@ export default function Review() {
                             {warning ? (
                                 <Alert type="warning" showIcon message={warning} />
                             ) : !result ? (
-                                <Space direction="vertical" align="center" style={{ width: '100%', paddingTop: 120 }}>
-                                    <FileSearchOutlined style={{ fontSize: 42, color: '#8c8c8c' }} />
-                                    <Typography.Text type="secondary">리뷰를 실행하면 결과가 여기에 표시됩니다.</Typography.Text>
-                                </Space>
+                                <Empty
+                                    image={<FileSearchOutlined style={{ fontSize: 42, color: '#8c8c8c' }} />}
+                                    description="리뷰를 실행하면 결과가 여기에 표시됩니다."
+                                    style={{ paddingTop: 120 }}
+                                />
                             ) : (
                                 <Space direction="vertical" size={16} style={{ width: '100%' }}>
                                     <Alert type="info" showIcon message={result.summary} />
