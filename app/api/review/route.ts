@@ -47,6 +47,19 @@ const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5-coder:1.5b';
 const MAX_OLLAMA_RETRIES = 3;
 const MAX_FINDINGS = 6;
+const LONG_CODE_CHUNK_THRESHOLD = 1000;
+const MAX_CHUNK_LINES = 350;
+
+type ReviewChunk = {
+    code: string;
+    startLine: number;
+    endLine: number;
+};
+
+type OllamaFindingsResult = {
+    findings: ReviewFinding[];
+    warning?: string;
+};
 
 function jsonResponse(body: unknown, status = 200) {
     return NextResponse.json(body, {
@@ -225,20 +238,37 @@ function normalizeSeverity(value: unknown): Severity | undefined {
     return undefined;
 }
 
-function normalizeFindings(value: OllamaReview, totalLines: number): ReviewFinding[] {
+function normalizeFindingLine(value: unknown, chunk: ReviewChunk) {
+    if (typeof value !== 'number') {
+        return undefined;
+    }
+
+    if (value >= chunk.startLine && value <= chunk.endLine) {
+        return value;
+    }
+
+    const localLineCount = chunk.endLine - chunk.startLine + 1;
+    if (value >= 1 && value <= localLineCount) {
+        return chunk.startLine + value - 1;
+    }
+
+    return undefined;
+}
+
+function normalizeFindings(value: OllamaReview, chunk: ReviewChunk): ReviewFinding[] {
     const findings = (value.findings || [])
         .map((item) => ({
             severity: normalizeSeverity(item.severity),
             title: item.title,
             detail: item.detail,
-            line: item.line,
+            line: normalizeFindingLine(item.line, chunk),
         }))
         .filter((item) => item.severity && item.title && item.detail)
         .map((item) => ({
             severity: item.severity as Severity,
             title: String(item.title),
             detail: String(item.detail),
-            line: typeof item.line === 'number' && item.line >= 1 && item.line <= totalLines ? item.line : undefined,
+            line: item.line,
         }));
 
     return dedupeFindings(findings);
@@ -263,10 +293,10 @@ function extractJsonObject(text: string) {
     }
 }
 
-function createLineNumberedCode(code: string) {
+function createLineNumberedCode(code: string, startLine = 1) {
     return code
         .split(/\r?\n/)
-        .map((line, index) => `${index + 1}: ${line}`)
+        .map((line, index) => `${startLine + index}: ${line}`)
         .join('\n');
 }
 
@@ -276,6 +306,72 @@ function normalizeReviewRequest(value?: string) {
 
 function normalizeTargetName(value?: string) {
     return value?.trim().slice(0, 255) || 'Manual input';
+}
+
+function createRangeChunks(lines: string[], startIndex: number, endIndex: number): ReviewChunk[] {
+    const chunks: ReviewChunk[] = [];
+    let current = startIndex;
+
+    while (current < endIndex) {
+        const chunkEnd = Math.min(current + MAX_CHUNK_LINES, endIndex);
+        chunks.push({
+            code: lines.slice(current, chunkEnd).join('\n'),
+            startLine: current + 1,
+            endLine: chunkEnd,
+        });
+        current = chunkEnd;
+    }
+
+    return chunks;
+}
+
+function isChunkBoundary(line: string, language: SupportedLanguage) {
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+        return false;
+    }
+
+    if (language === 'Java') {
+        return /^(public|private|protected)?\s*(class|interface|enum)\s+\w+/.test(trimmed)
+            || /^(public|private|protected)?\s*(static\s+)?[\w<>,[\]\s]+\s+\w+\s*\([^)]*\)\s*\{/.test(trimmed);
+    }
+
+    if (language === 'Python') {
+        return /^(class|def)\s+\w+/.test(trimmed);
+    }
+
+    return /^(export\s+)?(async\s+)?function\s+\w+/.test(trimmed)
+        || /^(export\s+)?(class|interface|type)\s+\w+/.test(trimmed)
+        || /^(export\s+)?(const|let)\s+\w+\s*=\s*(async\s*)?\([^)]*\)\s*=>/.test(trimmed);
+}
+
+function createReviewChunks(code: string, language: SupportedLanguage): ReviewChunk[] {
+    const lines = code.split(/\r?\n/);
+
+    if (lines.length <= LONG_CODE_CHUNK_THRESHOLD) {
+        return [{
+            code,
+            startLine: 1,
+            endLine: lines.length,
+        }];
+    }
+
+    const boundaries = lines
+        .map((line, index) => (isChunkBoundary(line, language) ? index : -1))
+        .filter((index) => index > 0);
+
+    if (boundaries.length === 0) {
+        return createRangeChunks(lines, 0, lines.length);
+    }
+
+    const points = Array.from(new Set([0, ...boundaries, lines.length])).sort((a, b) => a - b);
+    return points.flatMap((startIndex, index) => {
+        const endIndex = points[index + 1];
+        return typeof endIndex === 'number' && endIndex > startIndex
+            ? createRangeChunks(lines, startIndex, endIndex)
+            : [];
+    });
 }
 
 async function saveAndReturnReview(
@@ -308,9 +404,15 @@ function createReviewPrompt(
     language: SupportedLanguage,
     reviewRequest: string,
     retryCount: number,
-    previousResponse?: string
+    previousResponse: string | undefined,
+    chunk: ReviewChunk,
+    chunkIndex: number,
+    chunkCount: number
 ) {
     const schema = '{"findings":[{"severity":"high|medium|low","title":"짧은 한국어 제목","detail":"한두 문장의 한국어 설명","line":1}]}';
+    const chunkGuide = chunkCount > 1
+        ? `현재 코드는 전체 파일의 ${chunkIndex + 1}/${chunkCount}번째 범위입니다. 원본 라인 ${chunk.startLine}-${chunk.endLine}만 리뷰하세요.`
+        : '';
     const customReviewSection = reviewRequest
         ? [
             '사용자 추가 리뷰 요청:',
@@ -325,12 +427,13 @@ function createReviewPrompt(
             '이번에는 설명 없이 JSON 객체만 반환하세요.',
             `정확한 스키마: ${schema}`,
             '중복되거나 같은 의미의 finding을 여러 개 만들지 마세요.',
-            'line은 아래 라인 번호가 붙은 코드의 실제 문제 라인입니다.',
+            'line은 아래 라인 번호가 붙은 코드의 실제 문제 라인이며 원본 파일 기준 라인 번호입니다.',
+            chunkGuide,
             customReviewSection,
             previousResponse ? `이전 응답: ${previousResponse.slice(0, 1200)}` : '',
             `언어: ${language}`,
             '라인 번호가 붙은 코드:',
-            createLineNumberedCode(code),
+            createLineNumberedCode(code, chunk.startLine),
         ].filter(Boolean).join('\n');
     }
 
@@ -340,11 +443,12 @@ function createReviewPrompt(
         '버그, 보안, 유지보수성, 누락된 테스트를 우선하세요.',
         '최대 6개 항목만 반환하세요.',
         '중복되거나 같은 의미의 finding을 여러 개 만들지 마세요.',
-        'line은 아래 라인 번호가 붙은 코드의 실제 문제 라인입니다.',
+        'line은 아래 라인 번호가 붙은 코드의 실제 문제 라인이며 원본 파일 기준 라인 번호입니다.',
+        chunkGuide,
         customReviewSection,
         `언어: ${language}`,
         '라인 번호가 붙은 코드:',
-        createLineNumberedCode(code),
+        createLineNumberedCode(code, chunk.startLine),
     ].filter(Boolean).join('\n');
 }
 
@@ -388,15 +492,29 @@ class InvalidOllamaReviewError extends Error {
     }
 }
 
-async function createOllamaFindings(code: string, language: SupportedLanguage, reviewRequest: string) {
-    const totalLines = code.split(/\r?\n/).length;
+async function createOllamaChunkFindings(
+    chunk: ReviewChunk,
+    language: SupportedLanguage,
+    reviewRequest: string,
+    chunkIndex: number,
+    chunkCount: number
+) {
     let lastResponse = '';
 
     for (let retryCount = 0; retryCount < MAX_OLLAMA_RETRIES; retryCount += 1) {
-        lastResponse = await requestOllamaReview(createReviewPrompt(code, language, reviewRequest, retryCount, lastResponse));
+        lastResponse = await requestOllamaReview(createReviewPrompt(
+            chunk.code,
+            language,
+            reviewRequest,
+            retryCount,
+            lastResponse,
+            chunk,
+            chunkIndex,
+            chunkCount
+        ));
 
         try {
-            const findings = normalizeFindings(extractJsonObject(lastResponse), totalLines);
+            const findings = normalizeFindings(extractJsonObject(lastResponse), chunk);
             if (findings.length > 0) {
                 return findings;
             }
@@ -406,6 +524,33 @@ async function createOllamaFindings(code: string, language: SupportedLanguage, r
     }
 
     throw new InvalidOllamaReviewError();
+}
+
+async function createOllamaFindings(code: string, language: SupportedLanguage, reviewRequest: string): Promise<OllamaFindingsResult> {
+    const chunks = createReviewChunks(code, language);
+    const findings: ReviewFinding[] = [];
+    let failedChunks = 0;
+
+    for (let index = 0; index < chunks.length; index += 1) {
+        const chunk = chunks[index];
+        try {
+            findings.push(...await createOllamaChunkFindings(chunk, language, reviewRequest, index, chunks.length));
+        } catch {
+            failedChunks += 1;
+        }
+    }
+
+    const mergedFindings = dedupeFindings(findings);
+    if (mergedFindings.length === 0) {
+        throw new InvalidOllamaReviewError();
+    }
+
+    return {
+        findings: mergedFindings,
+        warning: failedChunks > 0
+            ? `Ollama 리뷰 중 ${failedChunks}/${chunks.length}개 코드 조각이 실패했습니다. 성공한 조각의 결과만 합산했습니다.`
+            : undefined,
+    };
 }
 
 export async function POST(req: Request) {
@@ -432,11 +577,13 @@ export async function POST(req: Request) {
 
     if (body.useOllama) {
         try {
+            const ollamaReview = await createOllamaFindings(code, language, reviewRequest);
             const result = await saveAndReturnReview({
                 source: 'ollama',
                 summary: 'Ollama 리뷰 결과입니다.',
+                warning: ollamaReview.warning,
                 detectedLanguage: detected.language,
-                findings: await createOllamaFindings(code, language, reviewRequest),
+                findings: ollamaReview.findings,
             }, {
                 code,
                 language,
