@@ -36,6 +36,10 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5-coder:1.5b';
 const MAX_OLLAMA_RETRIES = 3;
 const MAX_FINDINGS = 6;
 
+function getErrorMessage(err: unknown) {
+    return err instanceof Error ? err.message : '알 수 없는 오류';
+}
+
 function jsonResponse(body: unknown, status = 200) {
     return NextResponse.json(body, {
         status,
@@ -431,12 +435,9 @@ export async function POST(req: Request) {
                 findings: await createOllamaFindings(code, language, reviewRequest),
             });
         } catch (err) {
-            console.error(err);
-            const message = err instanceof Error ? err.message : '알 수 없는 오류';
-
             return jsonResponse({
                 source: 'local',
-                summary: `Ollama 호출 실패로 로컬 리뷰로 대체했습니다. 원인: ${message}`,
+                summary: `Ollama 호출 실패로 로컬 리뷰로 대체했습니다. 원인: ${getErrorMessage(err)}`,
                 detectedLanguage: detected.language,
                 findings: createLocalReview(code, language),
             });

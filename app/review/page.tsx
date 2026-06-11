@@ -49,9 +49,23 @@ const lineBorder = {
     low: '#1677ff',
 };
 
-const sampleCode = `async function saveToken(token: string) {
-  console.log('token', token);
-  localStorage.setItem('token', token);
+const sampleCode = `type ReviewPayload = {
+  code: string;
+  language: string;
+};
+
+async function requestReview(payload: ReviewPayload) {
+  const response = await fetch('/api/review', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error('Review request failed.');
+  }
+
+  return response.json();
 }`;
 
 function CodePreview({ code, findings }: { code: string; findings: Finding[] }) {
@@ -141,15 +155,18 @@ export default function Review() {
                 },
                 body: JSON.stringify(values),
             });
-            const data = await res.json();
+            const data = await res.json().catch(() => null);
 
             if (!res.ok) {
                 setResult(null);
-                setWarning(data.message || '리뷰 요청에 실패했습니다.');
+                setWarning(data?.message || '리뷰 요청에 실패했습니다.');
                 return;
             }
 
             setResult(data);
+        } catch {
+            setResult(null);
+            setWarning('리뷰 요청 중 오류가 발생했습니다. 네트워크 또는 서버 상태를 확인해 주세요.');
         } finally {
             setLoading(false);
         }
