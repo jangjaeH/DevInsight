@@ -1,15 +1,19 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
+    Alert,
     Badge,
     Button,
     Card,
     Col,
+    Empty,
     Flex,
     Progress,
     Row,
     Space,
+    Spin,
     Statistic,
     Table,
     Tag,
@@ -26,57 +30,48 @@ import {
     ThunderboltOutlined,
 } from '@ant-design/icons';
 
-type ReviewRow = {
-    key: string;
-    target: string;
+type ReviewStatus = 'pass' | 'watch' | 'action';
+
+type ReviewItem = {
+    id: number;
+    targetName: string;
     language: string;
+    detectedLanguage?: string;
+    source: string;
+    lineCount: number;
+    highCount: number;
+    mediumCount: number;
+    lowCount: number;
     score: number;
-    findings: number;
-    status: 'pass' | 'watch' | 'action';
-    updatedAt: string;
+    status: ReviewStatus;
+    createdAt: string;
 };
 
-const summaryCards = [
-    { title: '오늘 리뷰', value: 18, suffix: '건', icon: <FileSearchOutlined />, color: '#1677ff' },
-    { title: '통과율', value: 82, suffix: '%', icon: <CheckCircleOutlined />, color: '#52c41a' },
-    { title: '조치 필요', value: 5, suffix: '건', icon: <ThunderboltOutlined />, color: '#faad14' },
-];
+type ReviewDashboardResponse = {
+    stats: {
+        totalReviews: number;
+        averageScore: number;
+        highTotal: number;
+        mediumTotal: number;
+        lowTotal: number;
+        passCount: number;
+        actionCount: number;
+    };
+    recentReviews: ReviewItem[];
+};
 
-const recentReviews: ReviewRow[] = [
-    {
-        key: 'review-api',
-        target: 'app/api/review/route.ts',
-        language: 'TypeScript',
-        score: 86,
-        findings: 2,
-        status: 'watch',
-        updatedAt: '오늘 13:20',
+const emptyDashboard: ReviewDashboardResponse = {
+    stats: {
+        totalReviews: 0,
+        averageScore: 0,
+        highTotal: 0,
+        mediumTotal: 0,
+        lowTotal: 0,
+        passCount: 0,
+        actionCount: 0,
     },
-    {
-        key: 'login-api',
-        target: 'app/api/login/route.ts',
-        language: 'TypeScript',
-        score: 91,
-        findings: 1,
-        status: 'pass',
-        updatedAt: '오늘 12:45',
-    },
-    {
-        key: 'mes-work-order',
-        target: 'MPS010Service.saveMesWorkOrder',
-        language: 'Java',
-        score: 74,
-        findings: 4,
-        status: 'action',
-        updatedAt: '어제 18:10',
-    },
-];
-
-const healthItems = [
-    { label: 'Local rules', status: '정상', badge: 'success' as const },
-    { label: 'Ollama fallback', status: '대기', badge: 'processing' as const },
-    { label: 'Review queue', status: '3건', badge: 'warning' as const },
-];
+    recentReviews: [],
+};
 
 const statusLabel = {
     pass: { text: '통과', color: 'green' },
@@ -84,48 +79,124 @@ const statusLabel = {
     action: { text: '조치 필요', color: 'orange' },
 };
 
-const recentReviewColumns: ColumnsType<ReviewRow> = [
-    {
-        title: '대상',
-        dataIndex: 'target',
-        key: 'target',
-        render: (target: string, row) => (
-            <Space orientation="vertical" size={0}>
-                <Typography.Text strong>{target}</Typography.Text>
-                <Typography.Text type="secondary">{row.language}</Typography.Text>
-            </Space>
-        ),
-    },
-    {
-        title: '품질 점수',
-        dataIndex: 'score',
-        key: 'score',
-        width: 180,
-        render: (score: number) => <Progress percent={score} size="small" strokeColor={score >= 85 ? '#52c41a' : '#1677ff'} />,
-    },
-    {
-        title: '이슈',
-        dataIndex: 'findings',
-        key: 'findings',
-        width: 90,
-        render: (findings: number) => <Tag color={findings > 3 ? 'orange' : 'blue'}>{findings}건</Tag>,
-    },
-    {
-        title: '상태',
-        dataIndex: 'status',
-        key: 'status',
-        width: 110,
-        render: (status: ReviewRow['status']) => <Tag color={statusLabel[status].color}>{statusLabel[status].text}</Tag>,
-    },
-    {
-        title: '업데이트',
-        dataIndex: 'updatedAt',
-        key: 'updatedAt',
-        width: 120,
-    },
-];
+function formatDate(value: string) {
+    return new Intl.DateTimeFormat('ko-KR', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    }).format(new Date(value));
+}
 
 export default function Home() {
+    const [data, setData] = useState<ReviewDashboardResponse>(emptyDashboard);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const loadReviews = async () => {
+            setLoading(true);
+            setError(null);
+
+            try {
+                const response = await fetch('/api/reviews', { cache: 'no-store' });
+                const payload = await response.json();
+
+                if (!response.ok) {
+                    setError(payload.message || '리뷰 이력을 조회하지 못했습니다.');
+                    return;
+                }
+
+                setData(payload);
+            } catch {
+                setError('리뷰 이력 조회 중 오류가 발생했습니다.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadReviews();
+    }, []);
+
+    const summaryCards = useMemo(() => [
+        {
+            title: '전체 리뷰',
+            value: data.stats.totalReviews,
+            suffix: '건',
+            icon: <FileSearchOutlined />,
+            color: '#1677ff',
+        },
+        {
+            title: '평균 점수',
+            value: data.stats.averageScore,
+            suffix: '점',
+            icon: <CheckCircleOutlined />,
+            color: '#52c41a',
+        },
+        {
+            title: '조치 필요',
+            value: data.stats.actionCount,
+            suffix: '건',
+            icon: <ThunderboltOutlined />,
+            color: '#faad14',
+        },
+    ], [data]);
+
+    const columns: ColumnsType<ReviewItem> = [
+        {
+            title: '대상',
+            dataIndex: 'targetName',
+            key: 'targetName',
+            render: (targetName: string, row) => (
+                <Space orientation="vertical" size={0}>
+                    <Typography.Text strong>{targetName}</Typography.Text>
+                    <Typography.Text type="secondary">
+                        {row.language} / {row.source.toUpperCase()} / {row.lineCount} lines
+                    </Typography.Text>
+                </Space>
+            ),
+        },
+        {
+            title: '품질 점수',
+            dataIndex: 'score',
+            key: 'score',
+            width: 180,
+            render: (score: number) => (
+                <Progress
+                    percent={score}
+                    size="small"
+                    strokeColor={score >= 90 ? '#52c41a' : score >= 75 ? '#1677ff' : '#faad14'}
+                />
+            ),
+        },
+        {
+            title: '이슈',
+            key: 'findings',
+            width: 140,
+            render: (_, row) => (
+                <Space size={4} wrap>
+                    <Tag color={row.highCount > 0 ? 'red' : 'default'}>H {row.highCount}</Tag>
+                    <Tag color={row.mediumCount > 0 ? 'orange' : 'default'}>M {row.mediumCount}</Tag>
+                    <Tag color={row.lowCount > 0 ? 'blue' : 'default'}>L {row.lowCount}</Tag>
+                </Space>
+            ),
+        },
+        {
+            title: '상태',
+            dataIndex: 'status',
+            key: 'status',
+            width: 110,
+            render: (status: ReviewStatus) => <Tag color={statusLabel[status].color}>{statusLabel[status].text}</Tag>,
+        },
+        {
+            title: '업데이트',
+            dataIndex: 'createdAt',
+            key: 'createdAt',
+            width: 130,
+            render: formatDate,
+        },
+    ];
+
     return (
         <main style={{ padding: 24 }}>
             <Space orientation="vertical" size={20} style={{ width: '100%' }}>
@@ -135,7 +206,7 @@ export default function Home() {
                             DevInsight Home
                         </Typography.Title>
                         <Typography.Text type="secondary">
-                            코드 리뷰 실행, 품질 추적, AI 설정 상태를 한 화면에서 확인하는 작업 허브입니다.
+                            저장된 코드 리뷰 이력과 품질 상태를 한 화면에서 확인합니다.
                         </Typography.Text>
                     </div>
                     <Space wrap>
@@ -150,6 +221,8 @@ export default function Home() {
                     </Space>
                 </Flex>
 
+                {error ? <Alert type="error" showIcon title={error} /> : null}
+
                 <Row gutter={[16, 16]}>
                     {summaryCards.map((item) => (
                         <Col xs={24} md={8} key={item.title}>
@@ -159,6 +232,7 @@ export default function Home() {
                                     value={item.value}
                                     suffix={item.suffix}
                                     prefix={<span style={{ color: item.color }}>{item.icon}</span>}
+                                    loading={loading}
                                 />
                             </Card>
                         </Col>
@@ -177,32 +251,45 @@ export default function Home() {
                                 </Link>
                             }
                         >
-                            <Table
-                                columns={recentReviewColumns}
-                                dataSource={recentReviews}
-                                pagination={false}
-                                size="middle"
-                                scroll={{ x: 720 }}
-                            />
+                            <Spin spinning={loading}>
+                                {data.recentReviews.length > 0 ? (
+                                    <Table
+                                        columns={columns}
+                                        dataSource={data.recentReviews}
+                                        rowKey="id"
+                                        pagination={false}
+                                        size="middle"
+                                        scroll={{ x: 760 }}
+                                    />
+                                ) : (
+                                    <Empty description="저장된 리뷰 이력이 없습니다." />
+                                )}
+                            </Spin>
                         </Card>
                     </Col>
                     <Col xs={24} xl={8}>
                         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
                             <Card title="운영 상태">
                                 <Space orientation="vertical" size={14} style={{ width: '100%' }}>
-                                    {healthItems.map((item) => (
-                                        <Flex key={item.label} justify="space-between" align="center">
-                                            <Typography.Text>{item.label}</Typography.Text>
-                                            <Badge status={item.badge} text={item.status} />
-                                        </Flex>
-                                    ))}
+                                    <Flex justify="space-between" align="center">
+                                        <Typography.Text>Review history DB</Typography.Text>
+                                        <Badge status={error ? 'error' : 'success'} text={error ? '확인 필요' : '정상'} />
+                                    </Flex>
+                                    <Flex justify="space-between" align="center">
+                                        <Typography.Text>Stored reviews</Typography.Text>
+                                        <Badge status={data.stats.totalReviews > 0 ? 'processing' : 'default'} text={`${data.stats.totalReviews}건`} />
+                                    </Flex>
+                                    <Flex justify="space-between" align="center">
+                                        <Typography.Text>High findings</Typography.Text>
+                                        <Badge status={data.stats.highTotal > 0 ? 'warning' : 'success'} text={`${data.stats.highTotal}건`} />
+                                    </Flex>
                                 </Space>
                             </Card>
                             <Card title="다음 작업">
                                 <Space orientation="vertical" size={12}>
-                                    <Typography.Text>1. 리뷰 대상 코드를 붙여넣고 언어를 확인합니다.</Typography.Text>
-                                    <Typography.Text>2. High/Medium 항목을 우선 조치합니다.</Typography.Text>
-                                    <Typography.Text>3. 설정 화면에서 Ollama 연결 상태를 점검합니다.</Typography.Text>
+                                    <Typography.Text>1. 코드 입력 또는 파일 업로드로 리뷰를 실행합니다.</Typography.Text>
+                                    <Typography.Text>2. 저장된 결과는 Home/Dashboard에 자동 반영됩니다.</Typography.Text>
+                                    <Typography.Text>3. High/Medium 항목을 우선 조치합니다.</Typography.Text>
                                 </Space>
                                 <Link href="/setting">
                                     <Button style={{ marginTop: 16 }} icon={<SettingOutlined />}>

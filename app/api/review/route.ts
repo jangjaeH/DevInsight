@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { saveReviewHistory } from '@/lib/reviewHistory';
 
 type SupportedLanguage = 'TypeScript' | 'JavaScript' | 'Java' | 'Python';
 type Severity = 'high' | 'medium' | 'low';
@@ -8,6 +9,7 @@ type ReviewRequest = {
     language?: SupportedLanguage;
     useOllama?: boolean;
     reviewRequest?: string;
+    targetName?: string;
 };
 
 type ReviewFinding = {
@@ -29,6 +31,14 @@ type OllamaReview = {
         detail?: string;
         line?: number;
     }>;
+};
+
+type ReviewResult = {
+    source: 'local' | 'ollama';
+    summary: string;
+    detectedLanguage: string;
+    findings: ReviewFinding[];
+    reviewId?: number;
 };
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
@@ -306,6 +316,35 @@ function normalizeReviewRequest(value?: string) {
     return value?.trim().slice(0, 1200) || '';
 }
 
+function normalizeTargetName(value?: string) {
+    return value?.trim().slice(0, 255) || 'Manual input';
+}
+
+async function saveAndReturnReview(
+    result: ReviewResult,
+    request: {
+        code: string;
+        language: SupportedLanguage;
+        reviewRequest: string;
+        targetName?: string;
+    }
+) {
+    const reviewId = await saveReviewHistory({
+        targetName: normalizeTargetName(request.targetName),
+        language: request.language,
+        detectedLanguage: result.detectedLanguage,
+        source: result.source,
+        reviewRequest: request.reviewRequest,
+        code: request.code,
+        findings: result.findings,
+    });
+
+    return {
+        ...result,
+        reviewId,
+    };
+}
+
 function createReviewPrompt(
     code: string,
     language: SupportedLanguage,
@@ -410,6 +449,7 @@ export async function POST(req: Request) {
     const code = body.code?.trim() || '';
     const language = body.language || 'TypeScript';
     const reviewRequest = normalizeReviewRequest(body.reviewRequest);
+    const targetName = normalizeTargetName(body.targetName);
 
     if (!code) {
         return jsonResponse({ message: '리뷰할 코드를 입력하세요.' }, 400);
@@ -428,26 +468,47 @@ export async function POST(req: Request) {
 
     if (body.useOllama) {
         try {
-            return jsonResponse({
+            const result = await saveAndReturnReview({
                 source: 'ollama',
                 summary: 'Ollama 리뷰 결과입니다.',
                 detectedLanguage: detected.language,
                 findings: await createOllamaFindings(code, language, reviewRequest),
+            }, {
+                code,
+                language,
+                reviewRequest,
+                targetName,
             });
+
+            return jsonResponse(result);
         } catch (err) {
-            return jsonResponse({
+            const result = await saveAndReturnReview({
                 source: 'local',
                 summary: `Ollama 호출 실패로 로컬 리뷰로 대체했습니다. 원인: ${getErrorMessage(err)}`,
                 detectedLanguage: detected.language,
                 findings: createLocalReview(code, language),
+            }, {
+                code,
+                language,
+                reviewRequest,
+                targetName,
             });
+
+            return jsonResponse(result);
         }
     }
 
-    return jsonResponse({
+    const result = await saveAndReturnReview({
         source: 'local',
         summary: '로컬 휴리스틱 리뷰 결과입니다.',
         detectedLanguage: detected.language,
         findings: createLocalReview(code, language),
+    }, {
+        code,
+        language,
+        reviewRequest,
+        targetName,
     });
+
+    return jsonResponse(result);
 }

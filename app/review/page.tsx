@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Alert, Button, Card, Checkbox, Col, Empty, Form, Input, Row, Select, Space, Tag, Typography } from 'antd';
-import { FileSearchOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Checkbox, Col, Empty, Form, Input, Row, Select, Space, Tag, Typography, Upload } from 'antd';
+import { FileSearchOutlined, ThunderboltOutlined, UploadOutlined } from '@ant-design/icons';
 
 type Finding = {
     severity: 'high' | 'medium' | 'low';
@@ -16,6 +16,7 @@ type ReviewResponse = {
     summary: string;
     detectedLanguage?: string;
     findings: Finding[];
+    reviewId?: number;
 };
 
 type ReviewFormValues = {
@@ -23,6 +24,7 @@ type ReviewFormValues = {
     code: string;
     reviewRequest?: string;
     useOllama?: boolean;
+    targetName?: string;
 };
 
 const severityColor = {
@@ -67,6 +69,17 @@ async function requestReview(payload: ReviewPayload) {
 
   return response.json();
 }`;
+
+function getLanguageFromFileName(fileName: string) {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+
+    if (extension === 'ts' || extension === 'tsx') return 'TypeScript';
+    if (extension === 'js' || extension === 'jsx') return 'JavaScript';
+    if (extension === 'java') return 'Java';
+    if (extension === 'py') return 'Python';
+
+    return undefined;
+}
 
 function CodePreview({ code, findings }: { code: string; findings: Finding[] }) {
     const lines = code.split(/\r?\n/);
@@ -133,6 +146,7 @@ export default function Review() {
     const [reviewedCode, setReviewedCode] = useState(sampleCode);
     const [warning, setWarning] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
 
     const counts = useMemo(() => {
         return {
@@ -203,6 +217,43 @@ export default function Review() {
                                         ]}
                                     />
                                 </Form.Item>
+                                <Form.Item label="File Upload">
+                                    <Upload
+                                        accept=".ts,.tsx,.js,.jsx,.java,.py,.txt"
+                                        maxCount={1}
+                                        showUploadList={uploadedFileName ? { showRemoveIcon: true } : false}
+                                        beforeUpload={(file) => {
+                                            const reader = new FileReader();
+                                            reader.onload = () => {
+                                                const code = typeof reader.result === 'string' ? reader.result : '';
+                                                const language = getLanguageFromFileName(file.name);
+
+                                                form.setFieldsValue({
+                                                    code,
+                                                    targetName: file.name,
+                                                    ...(language ? { language } : {}),
+                                                });
+                                                setUploadedFileName(file.name);
+                                            };
+                                            reader.readAsText(file);
+                                            return false;
+                                        }}
+                                        onRemove={() => {
+                                            setUploadedFileName(null);
+                                            form.setFieldValue('targetName', undefined);
+                                        }}
+                                    >
+                                        <Button icon={<UploadOutlined />}>Upload Code File</Button>
+                                    </Upload>
+                                    {uploadedFileName ? (
+                                        <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+                                            {uploadedFileName}
+                                        </Typography.Text>
+                                    ) : null}
+                                </Form.Item>
+                                <Form.Item name="targetName" hidden>
+                                    <Input />
+                                </Form.Item>
                                 <Form.Item
                                     label="Code"
                                     name="code"
@@ -259,6 +310,7 @@ export default function Review() {
                                 <Space orientation="vertical" size={16} style={{ width: '100%' }}>
                                     <Alert type="info" showIcon title={result.summary} />
                                     <Space wrap>
+                                        {result.reviewId ? <Tag color="green">Saved #{result.reviewId}</Tag> : null}
                                         {result.detectedLanguage ? <Tag>Detected {result.detectedLanguage}</Tag> : null}
                                         <Tag color="red">High {counts.high}</Tag>
                                         <Tag color="orange">Medium {counts.medium}</Tag>
