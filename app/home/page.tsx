@@ -90,7 +90,7 @@ const recentReviewColumns: ColumnsType<ReviewRow> = [
         dataIndex: 'target',
         key: 'target',
         render: (target: string, row) => (
-            <Space direction="vertical" size={0}>
+            <Space orientation="vertical" size={0}>
                 <Typography.Text strong>{target}</Typography.Text>
                 <Typography.Text type="secondary">{row.language}</Typography.Text>
             </Space>
@@ -128,7 +128,7 @@ const recentReviewColumns: ColumnsType<ReviewRow> = [
 export default function Home() {
     return (
         <main style={{ padding: 24 }}>
-            <Space direction="vertical" size={20} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={20} style={{ width: '100%' }}>
                 <Flex justify="space-between" align="flex-start" wrap="wrap" gap={16}>
                     <div>
                         <Typography.Title level={2} style={{ marginBottom: 4 }}>
@@ -187,9 +187,9 @@ export default function Home() {
                         </Card>
                     </Col>
                     <Col xs={24} xl={8}>
-                        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
                             <Card title="운영 상태">
-                                <Space direction="vertical" size={14} style={{ width: '100%' }}>
+                                <Space orientation="vertical" size={14} style={{ width: '100%' }}>
                                     {healthItems.map((item) => (
                                         <Flex key={item.label} justify="space-between" align="center">
                                             <Typography.Text>{item.label}</Typography.Text>
@@ -199,7 +199,7 @@ export default function Home() {
                                 </Space>
                             </Card>
                             <Card title="다음 작업">
-                                <Space direction="vertical" size={12}>
+                                <Space orientation="vertical" size={12}>
                                     <Typography.Text>1. 리뷰 대상 코드를 붙여넣고 언어를 확인합니다.</Typography.Text>
                                     <Typography.Text>2. High/Medium 항목을 우선 조치합니다.</Typography.Text>
                                     <Typography.Text>3. 설정 화면에서 Ollama 연결 상태를 점검합니다.</Typography.Text>

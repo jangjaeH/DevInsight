@@ -104,7 +104,7 @@ const reviewColumns: ColumnsType<ReviewRow> = [
         dataIndex: 'file',
         key: 'file',
         render: (file: string, row) => (
-            <Space direction="vertical" size={0}>
+            <Space orientation="vertical" size={0}>
                 <Typography.Text strong>{file}</Typography.Text>
                 <Typography.Text type="secondary">{row.owner}</Typography.Text>
             </Space>
@@ -155,7 +155,7 @@ const reviewColumns: ColumnsType<ReviewRow> = [
 export default function Dashboard() {
     return (
         <main style={{ padding: 24 }}>
-            <Space direction="vertical" size={20} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={20} style={{ width: '100%' }}>
                 <Flex justify="space-between" align="flex-start" wrap="wrap" gap={16}>
                     <div>
                         <Typography.Title level={2} style={{ marginBottom: 4 }}>
@@ -198,7 +198,7 @@ export default function Dashboard() {
                         <Card title="품질 게이트">
                             <Flex align="center" gap={20} wrap="wrap">
                                 <Progress type="dashboard" percent={75} strokeColor="#52c41a" />
-                                <Space direction="vertical" size={12} style={{ flex: 1, minWidth: 220 }}>
+                                <Space orientation="vertical" size={12} style={{ flex: 1, minWidth: 220 }}>
                                     {gateItems.map((item) => (
                                         <Flex key={item.label} justify="space-between" align="center">
                                             <Typography.Text>{item.label}</Typography.Text>
@@ -211,7 +211,7 @@ export default function Dashboard() {
                     </Col>
                     <Col xs={24} xl={8}>
                         <Card title="위험도 분포">
-                            <Space direction="vertical" size={14} style={{ width: '100%' }}>
+                            <Space orientation="vertical" size={14} style={{ width: '100%' }}>
                                 {riskDistribution.map((item) => (
                                     <div key={item.label}>
                                         <Flex justify="space-between" align="center">
@@ -226,11 +226,11 @@ export default function Dashboard() {
                     </Col>
                     <Col xs={24} xl={8}>
                         <Card title="상태 요약">
-                            <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                            <Space orientation="vertical" size={16} style={{ width: '100%' }}>
                                 <Alert
                                     type="warning"
                                     showIcon
-                                    message="High 1건은 배포 전 조치가 필요합니다."
+                                    title="High 1건은 배포 전 조치가 필요합니다."
                                     description="MES 작업지시 중복 입력 가능성을 우선 확인하세요."
                                 />
                                 <Flex justify="space-between" align="center">

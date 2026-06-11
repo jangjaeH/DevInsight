@@ -174,7 +174,7 @@ export default function Review() {
 
     return (
         <main style={{ padding: 24 }}>
-            <Space direction="vertical" size={20} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={20} style={{ width: '100%' }}>
                 <div>
                     <Typography.Title level={2} style={{ marginBottom: 4 }}>
                         Code Review
@@ -248,7 +248,7 @@ export default function Review() {
                             style={{ minHeight: 520 }}
                         >
                             {warning ? (
-                                <Alert type="warning" showIcon message={warning} />
+                                <Alert type="warning" showIcon title={warning} />
                             ) : !result ? (
                                 <Empty
                                     image={<FileSearchOutlined style={{ fontSize: 42, color: '#8c8c8c' }} />}
@@ -256,8 +256,8 @@ export default function Review() {
                                     style={{ paddingTop: 120 }}
                                 />
                             ) : (
-                                <Space direction="vertical" size={16} style={{ width: '100%' }}>
-                                    <Alert type="info" showIcon message={result.summary} />
+                                <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+                                    <Alert type="info" showIcon title={result.summary} />
                                     <Space wrap>
                                         {result.detectedLanguage ? <Tag>Detected {result.detectedLanguage}</Tag> : null}
                                         <Tag color="red">High {counts.high}</Tag>
@@ -266,7 +266,7 @@ export default function Review() {
                                     </Space>
                                     {result.findings.map((finding, index) => (
                                         <Card key={`${finding.severity}-${finding.line || 'global'}-${finding.title}-${index}`} size="small">
-                                            <Space direction="vertical" size={6}>
+                                            <Space orientation="vertical" size={6}>
                                                 <Space wrap>
                                                     <Tag color={severityColor[finding.severity]}>
                                                         {severityLabel[finding.severity]}
