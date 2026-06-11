@@ -37,6 +37,7 @@ type OllamaReview = {
 type ReviewResult = {
     source: 'local' | 'ollama';
     summary: string;
+    warning?: string;
     detectedLanguage: string;
     findings: ReviewFinding[];
     reviewId?: number;
@@ -46,10 +47,6 @@ const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5-coder:1.5b';
 const MAX_OLLAMA_RETRIES = 3;
 const MAX_FINDINGS = 6;
-
-function getErrorMessage(err: unknown) {
-    return err instanceof Error ? err.message : '알 수 없는 오류';
-}
 
 function jsonResponse(body: unknown, status = 200) {
     return NextResponse.json(body, {
@@ -266,24 +263,6 @@ function extractJsonObject(text: string) {
     }
 }
 
-function createFallbackOllamaFinding(response: string): ReviewFinding[] {
-    const detail = response.replace(/```[\s\S]*?```/g, '').replace(/\s+/g, ' ').trim();
-
-    if (!detail) {
-        return [{
-            severity: 'low',
-            title: 'Ollama 응답이 비어 있습니다',
-            detail: 'Ollama가 응답했지만 리뷰 내용을 생성하지 못했습니다. 코드를 조금 더 구체적으로 입력한 뒤 다시 시도하세요.',
-        }];
-    }
-
-    return dedupeFindings([{
-        severity: 'medium',
-        title: 'Ollama 리뷰 결과',
-        detail: detail.length > 500 ? `${detail.slice(0, 500)}...` : detail,
-    }]);
-}
-
 function createLineNumberedCode(code: string) {
     return code
         .split(/\r?\n/)
@@ -403,6 +382,12 @@ async function requestOllamaReview(prompt: string) {
     return data.response || '';
 }
 
+class InvalidOllamaReviewError extends Error {
+    constructor() {
+        super('Ollama returned an invalid review payload.');
+    }
+}
+
 async function createOllamaFindings(code: string, language: SupportedLanguage, reviewRequest: string) {
     const totalLines = code.split(/\r?\n/).length;
     let lastResponse = '';
@@ -420,7 +405,7 @@ async function createOllamaFindings(code: string, language: SupportedLanguage, r
         }
     }
 
-    return createFallbackOllamaFinding(lastResponse);
+    throw new InvalidOllamaReviewError();
 }
 
 export async function POST(req: Request) {
@@ -461,9 +446,13 @@ export async function POST(req: Request) {
 
             return jsonResponse(result);
         } catch (err) {
+            const warning = err instanceof InvalidOllamaReviewError
+                ? 'Ollama 응답이 리뷰 JSON 형식이 아니어서 로컬 리뷰로 대체했습니다. 다시 시도할 수 있습니다.'
+                : 'Ollama 호출에 실패해서 로컬 리뷰로 대체했습니다. 설정을 확인한 뒤 다시 시도할 수 있습니다.';
             const result = await saveAndReturnReview({
                 source: 'local',
-                summary: `Ollama 호출 실패로 로컬 리뷰로 대체했습니다. 원인: ${getErrorMessage(err)}`,
+                summary: '로컬 휴리스틱 리뷰 결과입니다.',
+                warning,
                 detectedLanguage: detected.language,
                 findings: createLocalReview(code, language),
             }, {

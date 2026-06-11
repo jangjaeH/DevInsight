@@ -15,6 +15,7 @@ type Finding = {
 type ReviewResponse = {
     source: 'local' | 'ollama';
     summary: string;
+    warning?: string;
     detectedLanguage?: string;
     findings: Finding[];
     reviewId?: number;
@@ -343,6 +344,7 @@ export default function Review() {
                                 />
                             ) : (
                                 <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+                                    {result.warning ? <Alert type="warning" showIcon title={result.warning} /> : null}
                                     <Alert type="info" showIcon title={result.summary} />
                                     <Space wrap>
                                         {result.reviewId ? <Tag color="green">Saved #{result.reviewId}</Tag> : null}
