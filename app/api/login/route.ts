@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
 
 const SECRET_KEY = process.env.JWT_SECRET
+const SERVER_ERROR_MESSAGE = '요청 처리 중 오류가 발생했습니다.';
 type LoginRequest = {
     usercode?: string;
     password?: string;
@@ -58,9 +59,8 @@ export async function POST(req: NextRequest) {
                     });
                     return response
                 }
-            } catch (err) {
-                console.error(err);
-                return NextResponse.json({ message: '로그인 처리 중 오류가 발생했습니다.', token: '' }, { status: 500 });
+            } catch {
+                return NextResponse.json({ message: SERVER_ERROR_MESSAGE, token: '' }, { status: 500 });
             } finally {
                 if (conn) conn.release();
             }
@@ -101,9 +101,8 @@ export async function POST(req: NextRequest) {
                 );
 
                 return NextResponse.json({ message: '회원가입이 완료되었습니다.' }, { status: 201 });
-            } catch (err) {
-                console.error(err);
-                return NextResponse.json({ message: '회원가입 처리 중 오류가 발생했습니다.' }, { status: 500 });
+            } catch {
+                return NextResponse.json({ message: SERVER_ERROR_MESSAGE }, { status: 500 });
             } finally {
                 if (conn) conn.release();
             }

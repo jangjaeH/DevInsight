@@ -34,6 +34,11 @@ type OllamaReview = {
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5-coder:1.5b';
 const MAX_OLLAMA_RETRIES = 3;
+const MAX_FINDINGS = 6;
+
+function getErrorMessage(err: unknown) {
+    return err instanceof Error ? err.message : '알 수 없는 오류';
+}
 
 function jsonResponse(body: unknown, status = 200) {
     return NextResponse.json(body, {
@@ -85,6 +90,42 @@ function isLanguageMismatch(selected: SupportedLanguage, detected: LanguageDetec
 function findLine(lines: string[], pattern: RegExp) {
     const index = lines.findIndex((line) => pattern.test(line));
     return index >= 0 ? index + 1 : undefined;
+}
+
+function normalizeText(value: string) {
+    return value
+        .toLowerCase()
+        .replace(/[^0-9a-zA-Z가-힣ㄱ-ㅎㅏ-ㅣ]+/g, '')
+        .trim();
+}
+
+function dedupeFindings(findings: ReviewFinding[]) {
+    const seenExact = new Set<string>();
+    const seenTopic = new Set<string>();
+    const result: ReviewFinding[] = [];
+
+    findings.forEach((finding) => {
+        const normalizedTitle = normalizeText(finding.title);
+        const normalizedDetail = normalizeText(finding.detail);
+        const lineKey = finding.line ?? 'global';
+        const exactKey = [finding.severity, lineKey, normalizedTitle, normalizedDetail].join('|');
+        const topicKey = [
+            finding.severity,
+            lineKey,
+            normalizedTitle.slice(0, 32),
+            normalizedDetail.slice(0, 48),
+        ].join('|');
+
+        if (seenExact.has(exactKey) || seenTopic.has(topicKey)) {
+            return;
+        }
+
+        seenExact.add(exactKey);
+        seenTopic.add(topicKey);
+        result.push(finding);
+    });
+
+    return result.slice(0, MAX_FINDINGS);
 }
 
 function createLocalReview(code: string, language: SupportedLanguage): ReviewFinding[] {
@@ -146,6 +187,20 @@ function createLocalReview(code: string, language: SupportedLanguage): ReviewFin
         });
     }
 
+    if (
+        language === 'Java'
+        && /mesWorkOrder\.stream\(\)/.test(code)
+        && /rdsWorkOrderMap/.test(code)
+        && !/mesWorkOrderMap|distinct\(|groupingBy|toMap\(\s*row\s*->\s*toWorkProcessId\(row\.get\("workProcessId"\)\)/.test(code)
+    ) {
+        findings.push({
+            severity: 'medium',
+            title: 'MES 작업지시 중복 키 처리 필요',
+            detail: 'MES 원본에 같은 workProcessId가 여러 건 있으면 insert/update 대상에 중복 값이 들어갈 수 있습니다. RDS처럼 workProcessId 기준 Map으로 먼저 접거나 중복 제거 후 비교하세요.',
+            line: findLine(lines, /mesWorkOrder\.stream\(\)/),
+        });
+    }
+
     if (language === 'TypeScript' && !/type |interface |:\s*(string|number|boolean|unknown|never)/.test(code)) {
         findings.push({
             severity: 'low',
@@ -163,7 +218,7 @@ function createLocalReview(code: string, language: SupportedLanguage): ReviewFin
         });
     }
 
-    return findings;
+    return dedupeFindings(findings);
 }
 
 function normalizeSeverity(value: unknown): Severity | undefined {
@@ -185,7 +240,7 @@ function normalizeSeverity(value: unknown): Severity | undefined {
 }
 
 function normalizeFindings(value: OllamaReview, totalLines: number): ReviewFinding[] {
-    return (value.findings || [])
+    const findings = (value.findings || [])
         .map((item) => ({
             severity: normalizeSeverity(item.severity),
             title: item.title,
@@ -193,13 +248,14 @@ function normalizeFindings(value: OllamaReview, totalLines: number): ReviewFindi
             line: item.line,
         }))
         .filter((item) => item.severity && item.title && item.detail)
-        .slice(0, 6)
         .map((item) => ({
             severity: item.severity as Severity,
             title: String(item.title),
             detail: String(item.detail),
             line: typeof item.line === 'number' && item.line >= 1 && item.line <= totalLines ? item.line : undefined,
         }));
+
+    return dedupeFindings(findings);
 }
 
 function extractJsonObject(text: string) {
@@ -232,11 +288,11 @@ function createFallbackOllamaFinding(response: string): ReviewFinding[] {
         }];
     }
 
-    return [{
+    return dedupeFindings([{
         severity: 'medium',
         title: 'Ollama 리뷰 결과',
         detail: detail.length > 500 ? `${detail.slice(0, 500)}...` : detail,
-    }];
+    }]);
 }
 
 function createLineNumberedCode(code: string) {
@@ -271,6 +327,7 @@ function createReviewPrompt(
             '이전 응답은 코드 펜스 또는 설명 때문에 JSON으로 파싱되지 않았습니다.',
             '이번에는 설명 없이 JSON 객체만 반환하세요.',
             `정확한 스키마: ${schema}`,
+            '중복되거나 같은 의미의 finding을 여러 개 만들지 마세요.',
             'line은 아래 라인 번호가 붙은 코드의 실제 문제 라인입니다.',
             customReviewSection,
             previousResponse ? `이전 응답: ${previousResponse.slice(0, 1200)}` : '',
@@ -285,6 +342,7 @@ function createReviewPrompt(
         `정확한 스키마: ${schema}`,
         '버그, 보안, 유지보수성, 누락된 테스트를 우선하세요.',
         '최대 6개 항목만 반환하세요.',
+        '중복되거나 같은 의미의 finding을 여러 개 만들지 마세요.',
         'line은 아래 라인 번호가 붙은 코드의 실제 문제 라인입니다.',
         customReviewSection,
         `언어: ${language}`,
@@ -310,6 +368,7 @@ async function requestOllamaReview(prompt: string) {
             system: [
                 '당신은 한국어로만 답하는 시니어 코드 리뷰어입니다.',
                 '반드시 JSON만 반환하세요. 마크다운, 설명 문장, 코드블록은 반환하지 마세요.',
+                '같은 의미의 finding을 여러 번 반복하지 마세요.',
                 'title과 detail은 반드시 자연스러운 한국어로 작성하세요.',
                 'severity는 high, medium, low 중 하나만 사용하세요.',
                 'line은 문제가 있는 1부터 시작하는 코드 라인 번호입니다. 특정 라인이 없으면 생략하세요.',
@@ -376,12 +435,9 @@ export async function POST(req: Request) {
                 findings: await createOllamaFindings(code, language, reviewRequest),
             });
         } catch (err) {
-            console.error(err);
-            const message = err instanceof Error ? err.message : '알 수 없는 오류';
-
             return jsonResponse({
                 source: 'local',
-                summary: `Ollama 호출 실패로 로컬 리뷰로 대체했습니다. 원인: ${message}`,
+                summary: `Ollama 호출 실패로 로컬 리뷰로 대체했습니다. 원인: ${getErrorMessage(err)}`,
                 detectedLanguage: detected.language,
                 findings: createLocalReview(code, language),
             });

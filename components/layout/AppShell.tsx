@@ -20,17 +20,21 @@ export default function AppShell({
     const showNavigation = hasToken && !isLoginPage;
 
     const onLogout = async () => {
-        const res = await fetch("/api/login", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ action: "logout" }),
-        });
+        try {
+            const res = await fetch("/api/login", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ action: "logout" }),
+            });
 
-        if (res.ok) {
+            if (res.ok) {
+                router.replace("/login");
+                setTimeout(() => router.refresh(), 100);
+            }
+        } catch {
             router.replace("/login");
-            setTimeout(() => router.refresh(), 100);
         }
     };
 
