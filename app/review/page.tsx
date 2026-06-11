@@ -248,7 +248,7 @@ export default function Review() {
                                         <Tag color="blue">Low {counts.low}</Tag>
                                     </Space>
                                     {result.findings.map((finding, index) => (
-                                        <Card key={`${finding.title}-${index}`} size="small">
+                                        <Card key={`${finding.severity}-${finding.line || 'global'}-${finding.title}-${index}`} size="small">
                                             <Space direction="vertical" size={6}>
                                                 <Space wrap>
                                                     <Tag color={severityColor[finding.severity]}>
