@@ -1,5 +1,5 @@
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+'use client';
+
 import Link from 'next/link';
 import {
     Badge,
@@ -125,13 +125,7 @@ const recentReviewColumns: ColumnsType<ReviewRow> = [
     },
 ];
 
-export default async function Home() {
-    const cookieStore = await cookies();
-    const token = cookieStore.get('token');
-    if (!token) {
-        redirect('/login');
-    }
-
+export default function Home() {
     return (
         <main style={{ padding: 24 }}>
             <Space direction="vertical" size={20} style={{ width: '100%' }}>
