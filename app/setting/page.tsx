@@ -53,7 +53,7 @@ export default function Setting() {
 
     return (
         <main style={{ padding: 24 }}>
-            <Space direction="vertical" size={20} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={20} style={{ width: '100%' }}>
                 <div>
                     <Typography.Title level={2} style={{ marginBottom: 4 }}>
                         Settings
@@ -64,7 +64,7 @@ export default function Setting() {
                 </div>
 
                 {error ? (
-                    <Alert type="error" showIcon message={error} />
+                    <Alert type="error" showIcon title={error} />
                 ) : !status.ok ? (
                     <Alert
                         type="warning"
@@ -80,7 +80,7 @@ export default function Setting() {
                         description={`Ollama에는 연결되었지만 ${status.model} 모델을 찾지 못했습니다.`}
                     />
                 ) : (
-                    <Alert type="success" showIcon message="Ollama is ready" />
+                    <Alert type="success" showIcon title="Ollama is ready" />
                 )}
 
                 <Card

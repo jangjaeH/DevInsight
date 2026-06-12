@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Alert, Button, Card, Checkbox, Col, Empty, Form, Input, Row, Select, Space, Tag, Typography } from 'antd';
-import { FileSearchOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Checkbox, Col, Empty, Form, Input, Radio, Row, Select, Space, Tag, Typography, Upload } from 'antd';
+import { FileSearchOutlined, ThunderboltOutlined, UploadOutlined } from '@ant-design/icons';
+import { getLanguageFromFileName } from '@/lib/reviewLanguage';
 
 type Finding = {
     severity: 'high' | 'medium' | 'low';
@@ -14,16 +15,21 @@ type Finding = {
 type ReviewResponse = {
     source: 'local' | 'ollama';
     summary: string;
+    warning?: string;
     detectedLanguage?: string;
     findings: Finding[];
+    reviewId?: number;
 };
 
 type ReviewFormValues = {
     language: string;
-    code: string;
+    code?: string;
     reviewRequest?: string;
     useOllama?: boolean;
+    targetName?: string;
 };
+
+type ReviewMode = 'upload' | 'manual';
 
 const severityColor = {
     high: 'red',
@@ -130,9 +136,11 @@ function CodePreview({ code, findings }: { code: string; findings: Finding[] }) 
 export default function Review() {
     const [form] = Form.useForm<ReviewFormValues>();
     const [result, setResult] = useState<ReviewResponse | null>(null);
-    const [reviewedCode, setReviewedCode] = useState(sampleCode);
+    const [reviewedCode, setReviewedCode] = useState('');
     const [warning, setWarning] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+    const [reviewMode, setReviewMode] = useState<ReviewMode>('upload');
 
     const counts = useMemo(() => {
         return {
@@ -143,9 +151,17 @@ export default function Review() {
     }, [result]);
 
     const onFinish = async (values: ReviewFormValues) => {
+        const code = values.code?.trim() || '';
+
+        if (!code) {
+            setResult(null);
+            setWarning(reviewMode === 'upload' ? '리뷰할 코드 파일을 업로드하세요.' : '수동 입력 코드를 작성하세요.');
+            return;
+        }
+
         setLoading(true);
         setWarning(null);
-        setReviewedCode(values.code);
+        setReviewedCode(code);
 
         try {
             const res = await fetch('/api/review', {
@@ -153,7 +169,11 @@ export default function Review() {
                 headers: {
                     'Content-Type': 'application/json; charset=utf-8',
                 },
-                body: JSON.stringify(values),
+                body: JSON.stringify({
+                    ...values,
+                    code,
+                    targetName: reviewMode === 'upload' ? values.targetName : values.targetName || 'Manual input',
+                }),
             });
             const data = await res.json().catch(() => null);
 
@@ -174,13 +194,13 @@ export default function Review() {
 
     return (
         <main style={{ padding: 24 }}>
-            <Space direction="vertical" size={20} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={20} style={{ width: '100%' }}>
                 <div>
                     <Typography.Title level={2} style={{ marginBottom: 4 }}>
                         Code Review
                     </Typography.Title>
                     <Typography.Text type="secondary">
-                        코드를 붙여 넣고 로컬 규칙 또는 Ollama로 위험 신호를 빠르게 확인합니다.
+                        코드 파일을 업로드해 리뷰를 실행하고, 필요할 때만 수동 입력으로 보조합니다.
                     </Typography.Text>
                 </div>
 
@@ -190,9 +210,33 @@ export default function Review() {
                             <Form
                                 form={form}
                                 layout="vertical"
-                                initialValues={{ language: 'TypeScript', code: sampleCode, useOllama: true }}
+                                initialValues={{ language: 'TypeScript', code: '', useOllama: true }}
                                 onFinish={onFinish}
                             >
+                                <Form.Item label="Review Mode">
+                                    <Radio.Group
+                                        value={reviewMode}
+                                        optionType="button"
+                                        buttonStyle="solid"
+                                        onChange={(event) => {
+                                            const mode = event.target.value as ReviewMode;
+                                            setReviewMode(mode);
+                                            setResult(null);
+                                            setWarning(null);
+
+                                            if (mode === 'upload') {
+                                                form.setFieldsValue({ code: '', targetName: undefined });
+                                                setUploadedFileName(null);
+                                            } else {
+                                                form.setFieldsValue({ code: '', targetName: 'Manual input' });
+                                            }
+                                        }}
+                                        options={[
+                                            { label: 'File Upload', value: 'upload' },
+                                            { label: 'Manual Input', value: 'manual' },
+                                        ]}
+                                    />
+                                </Form.Item>
                                 <Form.Item label="Language" name="language">
                                     <Select
                                         options={[
@@ -203,14 +247,57 @@ export default function Review() {
                                         ]}
                                     />
                                 </Form.Item>
-                                <Form.Item
-                                    label="Code"
-                                    name="code"
-                                    rules={[{ required: true, message: '리뷰할 코드를 입력하세요.' }]}
-                                >
+                                {reviewMode === 'upload' ? (
+                                    <Form.Item label="Code File" required>
+                                        <Upload.Dragger
+                                            accept=".ts,.tsx,.js,.jsx,.java,.py,.txt"
+                                            maxCount={1}
+                                            showUploadList={uploadedFileName ? { showRemoveIcon: true } : false}
+                                            beforeUpload={(file) => {
+                                                const reader = new FileReader();
+                                                reader.onload = () => {
+                                                    const code = typeof reader.result === 'string' ? reader.result : '';
+                                                    const language = getLanguageFromFileName(file.name);
+
+                                                    form.setFieldsValue({
+                                                        code,
+                                                        targetName: file.name,
+                                                        ...(language ? { language } : {}),
+                                                    });
+                                                    setUploadedFileName(file.name);
+                                                    setWarning(null);
+                                                };
+                                                reader.readAsText(file);
+                                                return false;
+                                            }}
+                                            onRemove={() => {
+                                                setUploadedFileName(null);
+                                                form.setFieldsValue({ code: '', targetName: undefined });
+                                            }}
+                                        >
+                                            <p style={{ marginBottom: 8 }}>
+                                                <UploadOutlined style={{ fontSize: 28, color: '#1677ff' }} />
+                                            </p>
+                                            <Typography.Text strong>코드 파일을 업로드하세요</Typography.Text>
+                                            <Typography.Text type="secondary" style={{ display: 'block', marginTop: 6 }}>
+                                                TypeScript, JavaScript, Java, Python, txt 파일을 지원합니다.
+                                            </Typography.Text>
+                                        </Upload.Dragger>
+                                        {uploadedFileName ? (
+                                            <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+                                                선택된 파일: {uploadedFileName}
+                                            </Typography.Text>
+                                        ) : null}
+                                    </Form.Item>
+                                ) : null}
+                                <Form.Item name="targetName" hidden>
+                                    <Input />
+                                </Form.Item>
+                                <Form.Item name="code" hidden={reviewMode === 'upload'}>
                                     <Input.TextArea
-                                        rows={14}
+                                        rows={reviewMode === 'upload' ? 1 : 14}
                                         spellCheck={false}
+                                        placeholder={sampleCode}
                                         style={{ fontFamily: 'var(--font-mono), Consolas, monospace' }}
                                     />
                                 </Form.Item>
@@ -248,7 +335,7 @@ export default function Review() {
                             style={{ minHeight: 520 }}
                         >
                             {warning ? (
-                                <Alert type="warning" showIcon message={warning} />
+                                <Alert type="warning" showIcon title={warning} />
                             ) : !result ? (
                                 <Empty
                                     image={<FileSearchOutlined style={{ fontSize: 42, color: '#8c8c8c' }} />}
@@ -256,9 +343,11 @@ export default function Review() {
                                     style={{ paddingTop: 120 }}
                                 />
                             ) : (
-                                <Space direction="vertical" size={16} style={{ width: '100%' }}>
-                                    <Alert type="info" showIcon message={result.summary} />
+                                <Space orientation="vertical" size={16} style={{ width: '100%' }}>
+                                    {result.warning ? <Alert type="warning" showIcon title={result.warning} /> : null}
+                                    <Alert type="info" showIcon title={result.summary} />
                                     <Space wrap>
+                                        {result.reviewId ? <Tag color="green">Saved #{result.reviewId}</Tag> : null}
                                         {result.detectedLanguage ? <Tag>Detected {result.detectedLanguage}</Tag> : null}
                                         <Tag color="red">High {counts.high}</Tag>
                                         <Tag color="orange">Medium {counts.medium}</Tag>
@@ -266,7 +355,7 @@ export default function Review() {
                                     </Space>
                                     {result.findings.map((finding, index) => (
                                         <Card key={`${finding.severity}-${finding.line || 'global'}-${finding.title}-${index}`} size="small">
-                                            <Space direction="vertical" size={6}>
+                                            <Space orientation="vertical" size={6}>
                                                 <Space wrap>
                                                     <Tag color={severityColor[finding.severity]}>
                                                         {severityLabel[finding.severity]}

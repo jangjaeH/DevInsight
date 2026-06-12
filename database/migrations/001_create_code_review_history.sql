@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS code_review_history (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    target_name VARCHAR(255) NOT NULL,
+    language VARCHAR(32) NOT NULL,
+    detected_language VARCHAR(32) NULL,
+    source VARCHAR(20) NOT NULL,
+    review_request TEXT NULL,
+    code_preview TEXT NOT NULL,
+    code_hash CHAR(64) NOT NULL,
+    line_count INT NOT NULL DEFAULT 0,
+    findings_json LONGTEXT NOT NULL,
+    high_count INT NOT NULL DEFAULT 0,
+    medium_count INT NOT NULL DEFAULT 0,
+    low_count INT NOT NULL DEFAULT 0,
+    score INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    INDEX idx_code_review_history_created_at (created_at),
+    INDEX idx_code_review_history_score (score),
+    INDEX idx_code_review_history_language (language)
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
