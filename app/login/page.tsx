@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { Button, Form, Input, Modal } from 'antd';
 import { LockOutlined, UserOutlined } from '@ant-design/icons';
-import { useRouter } from 'next/navigation';
 import CustomAlert from '@/components/alert';
 
 type LoginValues = {
@@ -27,7 +26,6 @@ export default function LoginPage() {
     const [loginLoading, setLoginLoading] = useState(false);
     const [signupLoading, setSignupLoading] = useState(false);
     const [signupForm] = Form.useForm<SignupValues>();
-    const router = useRouter();
 
     const showMessage = (nextMessage: string, type: AlertType = 'error') => {
         setAlertType(type);
@@ -57,8 +55,7 @@ export default function LoginPage() {
             const data = await res.json();
 
             if (res.ok) {
-                router.replace('/home');
-                setTimeout(() => router.refresh(), 100);
+                window.location.assign('/home');
                 return;
             }
 
