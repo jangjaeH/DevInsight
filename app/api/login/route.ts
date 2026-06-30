@@ -52,7 +52,8 @@ export async function POST(req: NextRequest) {
                     const response = NextResponse.json({ message : '로그인에 성공했습니다.', token: token });
                     response.cookies.set('token', token, {
                         httpOnly: true, 
-                        secure: process.env.NODE_ENV === 'production', 
+                        secure: req.nextUrl.protocol === 'https:'
+                            && !['localhost', '127.0.0.1', '[::1]'].includes(req.nextUrl.hostname),
                         sameSite: 'lax', 
                         maxAge: 3600 * 5,
                         path: '/',

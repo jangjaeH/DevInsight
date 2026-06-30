@@ -2,7 +2,7 @@
 
 import { Button, Flex, Layout, Tooltip, Typography } from "antd";
 import { IdcardOutlined, LogoutOutlined } from "@ant-design/icons";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Sidemenu from "./menu/sidemenu";
 
 const { Sider, Content, Header } = Layout;
@@ -15,7 +15,6 @@ export default function AppShell({
     hasToken: boolean;
 }) {
     const pathname = usePathname();
-    const router = useRouter();
     const isLoginPage = pathname === "/login";
     const showNavigation = hasToken && !isLoginPage;
 
@@ -30,11 +29,10 @@ export default function AppShell({
             });
 
             if (res.ok) {
-                router.replace("/login");
-                setTimeout(() => router.refresh(), 100);
+                window.location.assign("/login");
             }
         } catch {
-            router.replace("/login");
+            window.location.assign("/login");
         }
     };
 

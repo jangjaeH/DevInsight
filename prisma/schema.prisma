@@ -1,8 +1,0 @@
-generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma" // 생성 위치 지정 가능
-}
-
-datasource db {
-  provider = "mysql"
-}
