@@ -110,17 +110,6 @@ export default function Setting() {
                         </Descriptions.Item>
                     </Descriptions>
                 </Card>
-
-                <Card title="Review Rules">
-                    <Space wrap>
-                        <Tag>Language mismatch guard</Tag>
-                        <Tag>Security exposure</Tag>
-                        <Tag>Type safety</Tag>
-                        <Tag>Async handling</Tag>
-                        <Tag>Debug logs</Tag>
-                        <Tag>Maintainability</Tag>
-                    </Space>
-                </Card>
             </Space>
         </main>
     );

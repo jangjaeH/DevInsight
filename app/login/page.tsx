@@ -1,9 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, Form, Input, Modal } from 'antd';
+import { Button, Form, Input, Modal, message } from 'antd';
 import { LockOutlined, UserOutlined } from '@ant-design/icons';
-import CustomAlert from '@/components/alert';
 
 type LoginValues = {
     usercode: string;
@@ -17,19 +16,15 @@ type SignupValues = {
     newid_password_confirm: string;
 };
 
-type AlertType = 'success' | 'info' | 'warning' | 'error';
-
 export default function LoginPage() {
-    const [message, setMessage] = useState<string | null>(null);
-    const [alertType, setAlertType] = useState<AlertType>('error');
+    const [messageApi, contextHolder] = message.useMessage();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [loginLoading, setLoginLoading] = useState(false);
     const [signupLoading, setSignupLoading] = useState(false);
     const [signupForm] = Form.useForm<SignupValues>();
 
-    const showMessage = (nextMessage: string, type: AlertType = 'error') => {
-        setAlertType(type);
-        setMessage(nextMessage);
+    const showMessage = (nextMessage: string, type: 'success' | 'error' = 'error') => {
+        messageApi[type](nextMessage);
     };
 
     const showModal = () => {
@@ -55,7 +50,7 @@ export default function LoginPage() {
             const data = await res.json();
 
             if (res.ok) {
-                window.location.assign('/home');
+                window.location.assign('/dashboard');
                 return;
             }
 
@@ -106,11 +101,7 @@ export default function LoginPage() {
                 background: '#f5f7fb',
             }}
         >
-            <CustomAlert
-                message={message || ''}
-                type={alertType}
-                onClose={() => setMessage(null)}
-            />
+            {contextHolder}
             <Form
                 name="login_form"
                 style={{

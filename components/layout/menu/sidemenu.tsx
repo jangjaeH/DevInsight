@@ -2,17 +2,12 @@
 
 import { Menu } from 'antd';
 import type { MenuProps } from 'antd';
-import { ClusterOutlined, DashboardOutlined, HomeOutlined, SettingOutlined } from '@ant-design/icons';
+import { ClusterOutlined, DashboardOutlined, SettingOutlined } from '@ant-design/icons';
 import { usePathname, useRouter } from 'next/navigation';
 
 type MenuItem = Required<MenuProps>['items'][number];
 
 const items: MenuItem[] = [
-    {
-        key: '/home',
-        label: 'Home',
-        icon: <HomeOutlined />,
-    },
     {
         key: '/review',
         label: 'Code Review',

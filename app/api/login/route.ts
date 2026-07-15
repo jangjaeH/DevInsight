@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import jwt from 'jsonwebtoken';
 import type { ResultSetHeader, RowDataPacket } from 'mysql2';
+import { hashPassword, verifyPassword } from '@/lib/password';
 
 const SECRET_KEY = process.env.JWT_SECRET
 const SERVER_ERROR_MESSAGE = '요청 처리 중 오류가 발생했습니다.';
@@ -17,11 +18,21 @@ type LoginRequest = {
 
 type UserRow = RowDataPacket & {
     usercode: string;
+    password: string;
     username?: string;
 };
 
 export async function POST(req: NextRequest) {
-        const body = (await req.json()) as LoginRequest;
+        let body: LoginRequest;
+        try {
+            body = (await req.json()) as LoginRequest;
+        } catch {
+            return NextResponse.json({ message: 'Invalid JSON request.' }, { status: 400 });
+        }
+
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
+            return NextResponse.json({ message: 'Invalid JSON request.' }, { status: 400 });
+        }
         const { usercode, password, action } = body;
 
         if(action == 'login') {
@@ -31,7 +42,14 @@ export async function POST(req: NextRequest) {
                     return NextResponse.json({ message: 'JWT secret is not configured.' }, { status: 500 });
                 }
 
-                if (!usercode || !password) {
+                if (
+                    typeof usercode !== 'string'
+                    || typeof password !== 'string'
+                    || !usercode.trim()
+                    || !password
+                    || usercode.length > 64
+                    || password.length > 128
+                ) {
                     return NextResponse.json({ message: '아이디와 비밀번호를 입력하세요.', token: '' }, { status: 400 });
                 }
 
@@ -39,21 +57,31 @@ export async function POST(req: NextRequest) {
 
 
                 const [rows] = await conn.query(
-                    'SELECT * FROM users WHERE usercode = ? AND password = ?',
-                    [usercode, password]
+                    'SELECT usercode, password FROM users WHERE usercode = ? LIMIT 1',
+                    [usercode.trim()]
                 ) as [UserRow[], unknown]
 
-                if(rows.length === 0) {
+                const passwordCheck = rows[0]
+                    ? await verifyPassword(password, rows[0].password)
+                    : { valid: false, needsRehash: false };
+
+                if(!passwordCheck.valid) {
                     return NextResponse.json({message: '아이디 또는 비밀번호가 올바르지 않습니다.', token: ''}, {status: 401});
                 } else {
-                    const payload = { usercode };
+                    if (passwordCheck.needsRehash) {
+                        await conn.query(
+                            'UPDATE users SET password = ? WHERE usercode = ?',
+                            [await hashPassword(password), usercode.trim()]
+                        );
+                    }
+
+                    const payload = { usercode: usercode.trim() };
                     const token = jwt.sign(payload, SECRET_KEY!, { expiresIn: '5h' });
 
-                    const response = NextResponse.json({ message : '로그인에 성공했습니다.', token: token });
+                    const response = NextResponse.json({ message : '로그인에 성공했습니다.' });
                     response.cookies.set('token', token, {
                         httpOnly: true, 
-                        secure: req.nextUrl.protocol === 'https:'
-                            && !['localhost', '127.0.0.1', '[::1]'].includes(req.nextUrl.hostname),
+                        secure: process.env.NODE_ENV === 'production',
                         sameSite: 'lax', 
                         maxAge: 3600 * 5,
                         path: '/',
@@ -71,6 +99,8 @@ export async function POST(req: NextRequest) {
             const response = NextResponse.json({ message: 'Logout success' });
             response.cookies.set('token', '', {
                 httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
                 expires: new Date(0),
                 path: '/',
             });
@@ -82,14 +112,24 @@ export async function POST(req: NextRequest) {
             try {
                 const {newid_usercode, newid_username, newid_password} = body;
 
-                if (!newid_usercode || !newid_username || !newid_password) {
+                if (
+                    typeof newid_usercode !== 'string'
+                    || typeof newid_username !== 'string'
+                    || typeof newid_password !== 'string'
+                    || !newid_usercode.trim()
+                    || !newid_username.trim()
+                    || newid_password.length < 8
+                    || newid_usercode.length > 64
+                    || newid_username.length > 100
+                    || newid_password.length > 128
+                ) {
                     return NextResponse.json({ message: '필수 가입 정보를 입력하세요.' }, { status: 400 });
                 }
 
                 conn = await db.getConnection();
                 const [exists] = await conn.query(
                     'SELECT usercode FROM users WHERE usercode = ? LIMIT 1',
-                    [newid_usercode]
+                    [newid_usercode.trim()]
                 ) as [UserRow[], unknown];
 
                 if (exists.length > 0) {
@@ -98,11 +138,14 @@ export async function POST(req: NextRequest) {
 
                 await conn.query<ResultSetHeader>(
                     'INSERT INTO users (usercode, username, password) VALUES (?, ?, ?)',
-                    [newid_usercode, newid_username, newid_password]
+                    [newid_usercode.trim(), newid_username.trim(), await hashPassword(newid_password)]
                 );
 
                 return NextResponse.json({ message: '회원가입이 완료되었습니다.' }, { status: 201 });
-            } catch {
+            } catch (error) {
+                if (error && typeof error === 'object' && 'code' in error && error.code === 'ER_DUP_ENTRY') {
+                    return NextResponse.json({ message: '이미 사용 중인 아이디입니다.' }, { status: 409 });
+                }
                 return NextResponse.json({ message: SERVER_ERROR_MESSAGE }, { status: 500 });
             } finally {
                 if (conn) conn.release();
