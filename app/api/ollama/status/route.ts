@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { isValidToken } from '@/lib/auth';
 
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'codellama';
@@ -7,10 +9,15 @@ type OllamaTagsResponse = {
     models?: Array<{ name?: string }>;
 };
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+    if (!isValidToken(req.cookies.get('token')?.value)) {
+        return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    }
+
     try {
         const response = await fetch(`${OLLAMA_URL}/api/tags`, {
             cache: 'no-store',
+            signal: AbortSignal.timeout(10_000),
         });
 
         if (!response.ok) {

@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { saveReviewHistory } from '@/lib/reviewHistory';
 import { detectLanguage } from '@/lib/reviewLanguage';
+import { isValidToken } from '@/lib/auth';
 
 type SupportedLanguage = 'TypeScript' | 'JavaScript' | 'Java' | 'Python';
 type Severity = 'high' | 'medium' | 'low';
@@ -47,8 +49,10 @@ const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5-coder:1.5b';
 const MAX_OLLAMA_RETRIES = 3;
 const MAX_FINDINGS = 6;
-const LONG_CODE_CHUNK_THRESHOLD = 1000;
 const MAX_CHUNK_LINES = 350;
+const MAX_CODE_BYTES = 200_000;
+const MAX_CODE_LINES = 1000;
+const supportedLanguages = new Set<SupportedLanguage>(['TypeScript', 'JavaScript', 'Java', 'Python']);
 
 type ReviewChunk = {
     code: string;
@@ -300,12 +304,12 @@ function createLineNumberedCode(code: string, startLine = 1) {
         .join('\n');
 }
 
-function normalizeReviewRequest(value?: string) {
-    return value?.trim().slice(0, 1200) || '';
+function normalizeReviewRequest(value?: unknown) {
+    return typeof value === 'string' ? value.trim().slice(0, 1200) : '';
 }
 
-function normalizeTargetName(value?: string) {
-    return value?.trim().slice(0, 255) || 'Manual input';
+function normalizeTargetName(value?: unknown) {
+    return typeof value === 'string' ? value.trim().slice(0, 255) || 'Manual input' : 'Manual input';
 }
 
 function createRangeChunks(lines: string[], startIndex: number, endIndex: number): ReviewChunk[] {
@@ -349,7 +353,7 @@ function isChunkBoundary(line: string, language: SupportedLanguage) {
 function createReviewChunks(code: string, language: SupportedLanguage): ReviewChunk[] {
     const lines = code.split(/\r?\n/);
 
-    if (lines.length <= LONG_CODE_CHUNK_THRESHOLD) {
+    if (lines.length <= MAX_CHUNK_LINES) {
         return [{
             code,
             startLine: 1,
@@ -476,6 +480,7 @@ async function requestOllamaReview(prompt: string) {
             ].join('\n'),
             prompt,
         }),
+        signal: AbortSignal.timeout(30_000),
     });
 
     if (!response.ok) {
@@ -553,15 +558,42 @@ async function createOllamaFindings(code: string, language: SupportedLanguage, r
     };
 }
 
-export async function POST(req: Request) {
-    const body = (await req.json()) as ReviewRequest;
-    const code = body.code?.trim() || '';
+export async function POST(req: NextRequest) {
+    if (!isValidToken(req.cookies.get('token')?.value)) {
+        return jsonResponse({ message: 'Unauthorized' }, 401);
+    }
+
+    const contentLength = Number(req.headers.get('content-length') || 0);
+    if (contentLength > MAX_CODE_BYTES * 2) {
+        return jsonResponse({ message: 'Review request is too large.' }, 413);
+    }
+
+    let body: ReviewRequest;
+    try {
+        body = (await req.json()) as ReviewRequest;
+    } catch {
+        return jsonResponse({ message: 'Invalid JSON request.' }, 400);
+    }
+
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        return jsonResponse({ message: 'Invalid JSON request.' }, 400);
+    }
+
+    const code = typeof body.code === 'string' ? body.code.trim() : '';
     const language = body.language || 'TypeScript';
     const reviewRequest = normalizeReviewRequest(body.reviewRequest);
     const targetName = normalizeTargetName(body.targetName);
 
     if (!code) {
         return jsonResponse({ message: '리뷰할 코드를 입력하세요.' }, 400);
+    }
+
+    if (!supportedLanguages.has(language)) {
+        return jsonResponse({ message: 'Unsupported language.' }, 400);
+    }
+
+    if (Buffer.byteLength(code, 'utf8') > MAX_CODE_BYTES || code.split(/\r?\n/).length > MAX_CODE_LINES) {
+        return jsonResponse({ message: 'Code must be at most 200 KB and 1,000 lines.' }, 413);
     }
 
     const detected = detectLanguage(code) as LanguageDetection;
@@ -575,7 +607,7 @@ export async function POST(req: Request) {
         );
     }
 
-    if (body.useOllama) {
+    if (body.useOllama === true) {
         try {
             const ollamaReview = await createOllamaFindings(code, language, reviewRequest);
             const result = await saveAndReturnReview({

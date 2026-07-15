@@ -4,6 +4,7 @@ import 'antd/dist/reset.css';
 import { cookies } from "next/headers";
 import AppShell from "@/components/layout/AppShell";
 import { AntdRegistry } from '@ant-design/nextjs-registry';
+import { isValidToken } from '@/lib/auth';
 
 export const metadata: Metadata = {
   title: "dev-insight",
@@ -16,13 +17,13 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
-  const token = cookieStore.get('token');
+  const authenticated = isValidToken(cookieStore.get('token')?.value);
 
   return (
     <html lang="ko">
       <body>
         <AntdRegistry>
-            <AppShell hasToken={!!token}>
+            <AppShell hasToken={authenticated}>
               {children}
             </AppShell>
         </AntdRegistry>

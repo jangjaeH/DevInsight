@@ -1,9 +1,10 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { isValidToken } from '@/lib/auth';
 
 export default async function Home() {
     const cookieStore = await cookies();
-    const token = cookieStore.get('token');
+    const authenticated = isValidToken(cookieStore.get('token')?.value);
 
-    redirect(token ? '/home' : '/login');
+    redirect(authenticated ? '/dashboard' : '/login');
 }

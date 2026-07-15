@@ -125,18 +125,8 @@ function parseFindings(value: string): ReviewFindingRecord[] {
         const findings = JSON.parse(value);
         return Array.isArray(findings) ? findings : [];
     } catch {
-        try {
-            const decoded = Buffer.from(value, 'base64').toString('utf8');
-            const findings = JSON.parse(decoded);
-            return Array.isArray(findings) ? findings : [];
-        } catch {
-            return [];
-        }
+        return [];
     }
-}
-
-function serializeFindings(findings: ReviewFindingRecord[]) {
-    return Buffer.from(JSON.stringify(findings), 'utf8').toString('base64');
 }
 
 function mapHistoryRow(row: ReviewHistoryRow): ReviewHistoryItem {
@@ -186,12 +176,10 @@ export async function ensureReviewHistoryTable() {
                 INDEX idx_code_review_history_score (score),
                 INDEX idx_code_review_history_language (language)
             ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-        `).then(() => undefined);
-        tableReady = tableReady.then(() => db.query(`
-            ALTER TABLE code_review_history
-            CONVERT TO CHARACTER SET utf8mb4
-            COLLATE utf8mb4_unicode_ci
-        `).then(() => undefined));
+        `).then(() => undefined).catch((error) => {
+            tableReady = null;
+            throw error;
+        });
     }
 
     return tableReady;
@@ -230,7 +218,7 @@ export async function saveReviewHistory(input: SaveReviewHistoryInput) {
             createCodePreview(input.code),
             createCodeHash(input.code),
             countLines(input.code),
-            serializeFindings(input.findings),
+            JSON.stringify(input.findings),
             highCount,
             mediumCount,
             lowCount,
